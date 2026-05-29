@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 
 export function useBalance(userId?: string) {
   const [balance, setBalance] = useState<number>(0)
@@ -9,6 +9,8 @@ export function useBalance(userId?: string) {
 
   useEffect(() => {
     if (!userId) return
+
+    const supabase = createClient()
 
     // Fetch initial balance
     supabase
@@ -50,3 +52,4 @@ export function useBalance(userId?: string) {
 
   return { balance, flashState }
 }
+

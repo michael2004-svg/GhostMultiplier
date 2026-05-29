@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 
 export default function ForgotPage() {
@@ -12,9 +12,12 @@ export default function ForgotPage() {
   async function handleReset(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+
+    const supabase = createClient()
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     })
+
     if (error) {
       toast.error(error.message)
     } else {
@@ -71,3 +74,4 @@ export default function ForgotPage() {
     </div>
   )
 }
+

@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
@@ -15,14 +15,15 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
 
+    const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       toast.error(error.message)
-      setLoading(false) // only reset on error — on success we're navigating away
+      setLoading(false)
     } else {
       toast.success('Welcome back!')
-      router.replace('/game') // no router.refresh(), no getSession() — signInWithPassword already sets the session
+      router.replace('/game')
     }
   }
 

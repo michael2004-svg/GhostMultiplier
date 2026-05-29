@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase/server'
 
 export async function GET(req: NextRequest) {
-  const supabase = createServerSupabase()
+  const supabase = createServiceClient()
   const authHeader = req.headers.get('authorization')
   if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -19,3 +19,4 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ user: profile })
 }
+

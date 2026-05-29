@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 
 export default function RegisterPage() {
@@ -16,15 +16,19 @@ export default function RegisterPage() {
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+
+    const supabase = createClient()
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
     })
+
     if (error) {
       toast.error(error.message)
       setLoading(false)
       return
     }
+
     if (data.user) {
       await supabase.from('users').insert({
         id: data.user.id,
@@ -33,9 +37,9 @@ export default function RegisterPage() {
         phone: form.phone,
       })
       toast.success('Account created! Welcome to Nairobi King')
-      router.push('/game')
+      router.replace('/game') // replace so back button doesn't return to register
+      // no setLoading(false) — navigating away, no UI to reset
     }
-    setLoading(false)
   }
 
   return (
@@ -91,3 +95,4 @@ export default function RegisterPage() {
     </div>
   )
 }
+
