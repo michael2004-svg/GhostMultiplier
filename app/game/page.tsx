@@ -1,10 +1,9 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import GameClient from './GameClient'
 
 export default async function GamePage() {
-  const supabase = createServerComponentClient({ cookies })
+  const supabase = createClient()
 
   const { data: { user }, error } = await supabase.auth.getUser()
   if (!user || error) redirect('/login')
