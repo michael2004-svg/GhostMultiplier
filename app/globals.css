@@ -1,0 +1,210 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --nk-black: #0A0A0A;
+  --nk-crimson-dark: #1A0000;
+  --nk-gold: #D4AF37;
+  --nk-red: #C0392B;
+  --nk-green: #27AE60;
+  --nk-orange: #F39C12;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--nk-black);
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #1A0000; }
+::-webkit-scrollbar-thumb { background: #D4AF37; border-radius: 2px; }
+
+/* Card glow effect */
+.card-glow-red {
+  filter: drop-shadow(0 0 30px #C0392B) drop-shadow(0 0 60px #C0392B88);
+}
+.card-glow-black {
+  filter: drop-shadow(0 0 30px #444) drop-shadow(0 0 60px #22222288);
+}
+.card-glow-gold {
+  filter: drop-shadow(0 0 20px #D4AF37) drop-shadow(0 0 40px #D4AF3766);
+}
+
+/* Nairobi skyline background */
+.nairobi-bg {
+  background:
+    radial-gradient(ellipse at 50% 100%, #2A000066 0%, transparent 70%),
+    radial-gradient(ellipse at 20% 80%, #1A000044 0%, transparent 50%),
+    linear-gradient(180deg, #0A0A0A 0%, #0D0000 100%);
+}
+
+/* Multiplier graph */
+.graph-line {
+  stroke: #C0392B;
+  stroke-width: 2;
+  fill: none;
+  filter: drop-shadow(0 0 6px #C0392B);
+}
+.graph-fill {
+  fill: url(#graphGradient);
+  opacity: 0.3;
+}
+
+/* Phase indicator */
+.phase-active {
+  color: #D4AF37;
+  border-bottom: 2px solid #D4AF37;
+}
+.phase-inactive {
+  color: #666;
+}
+
+/* Bet color buttons */
+.btn-red {
+  background: linear-gradient(135deg, #8B0000, #C0392B);
+  border: 1px solid #E74C3C44;
+}
+.btn-red:hover {
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  box-shadow: 0 0 20px #C0392B66;
+}
+.btn-red.selected {
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  box-shadow: 0 0 30px #C0392B88;
+  border: 1px solid #E74C3C;
+}
+
+.btn-black {
+  background: linear-gradient(135deg, #111, #1C1C1C);
+  border: 1px solid #44444488;
+}
+.btn-black:hover {
+  background: linear-gradient(135deg, #1C1C1C, #333);
+  box-shadow: 0 0 20px #44444466;
+}
+.btn-black.selected {
+  background: linear-gradient(135deg, #222, #444);
+  box-shadow: 0 0 30px #ffffff22;
+  border: 1px solid #888;
+}
+
+/* Cashout button pulse */
+.btn-cashout {
+  background: linear-gradient(135deg, #8B0000, #C0392B);
+  animation: cashoutPulse 1s ease-in-out infinite;
+}
+@keyframes cashoutPulse {
+  0%, 100% { box-shadow: 0 0 15px #C0392B66; }
+  50% { box-shadow: 0 0 40px #C0392B, 0 0 80px #C0392B44; }
+}
+
+/* Place bet button */
+.btn-place-bet {
+  background: linear-gradient(135deg, #1a5c30, #27AE60);
+}
+.btn-place-bet:hover {
+  background: linear-gradient(135deg, #27AE60, #2ecc71);
+  box-shadow: 0 0 30px #27AE6066;
+}
+.btn-place-bet:disabled {
+  background: #333;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* VIP progress bar */
+.vip-bar {
+  background: linear-gradient(90deg, #D4AF37, #F39C12);
+  box-shadow: 0 0 8px #D4AF3766;
+}
+
+/* Live feed item */
+.feed-item {
+  animation: feedSlideIn 0.3s ease-out;
+}
+@keyframes feedSlideIn {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Result badge */
+.result-R {
+  background: #C0392B;
+  color: white;
+}
+.result-B {
+  background: #1C1C1C;
+  color: #999;
+  border: 1px solid #444;
+}
+.result-J {
+  background: linear-gradient(135deg, #6C3483, #1ABC9C);
+  color: white;
+}
+
+/* Joker overlay */
+.joker-overlay {
+  animation: jokerGlitch 0.5s ease-out;
+}
+@keyframes jokerGlitch {
+  0% { filter: hue-rotate(0deg) saturate(1); }
+  25% { filter: hue-rotate(90deg) saturate(3) brightness(1.5); }
+  50% { filter: hue-rotate(180deg) saturate(5) brightness(2); }
+  75% { filter: hue-rotate(270deg) saturate(3) brightness(1.5); }
+  100% { filter: hue-rotate(360deg) saturate(1); }
+}
+
+/* Token buttons */
+.token-btn {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #333;
+  transition: all 0.2s;
+}
+.token-btn:hover {
+  border-color: #D4AF37;
+  box-shadow: 0 0 15px #D4AF3744;
+}
+
+/* Multiplier color thresholds */
+.mult-white { color: #FFFFFF; }
+.mult-yellow { color: #F39C12; }
+.mult-orange { color: #E67E22; }
+.mult-red { color: #E74C3C; animation: glowRed 1s ease-in-out infinite alternate; }
+
+@keyframes glowRed {
+  from { text-shadow: 0 0 10px #E74C3C; }
+  to { text-shadow: 0 0 30px #E74C3C, 0 0 60px #E74C3C; }
+}
+
+/* Leaderboard rank colors */
+.rank-1 { color: #FFD700; }
+.rank-2 { color: #C0C0C0; }
+.rank-3 { color: #CD7F32; }
+
+/* Mobile nav */
+.mobile-nav-item.active {
+  color: #D4AF37;
+  border-top: 2px solid #D4AF37;
+}
+
+/* Particle embers */
+.ember {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #D4AF37;
+  border-radius: 50%;
+  pointer-events: none;
+}
