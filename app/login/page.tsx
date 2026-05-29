@@ -14,18 +14,16 @@ export default function LoginPage() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+
     if (error) {
       toast.error(error.message)
+      setLoading(false) // only reset on error — on success we're navigating away
     } else {
       toast.success('Welcome back!')
-
-await supabase.auth.getSession()
-
-router.replace('/game')
-router.refresh()
+      router.replace('/game') // no router.refresh(), no getSession() — signInWithPassword already sets the session
     }
-    setLoading(false)
   }
 
   return (
@@ -110,3 +108,4 @@ router.refresh()
     </div>
   )
 }
+
