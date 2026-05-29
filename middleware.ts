@@ -13,6 +13,12 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          // CRITICAL: must write to request first, then rebuild response
+          // This ensures the refreshed session token reaches Server Components
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          )
+          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -21,8 +27,17 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — keeps cookies alive and synced between client and server
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Protect /game routes
+  if (!user && request.nextUrl.pathname.startsWith('/game')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Redirect logged-in users away from auth pages
+  if (user && ['/login', '/register', '/forgot'].includes(request.nextUrl.pathname)) {
+    return NextResponse.redirect(new URL('/game', request.url))
+  }
 
   return supabaseResponse
 }
@@ -32,3 +47,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+

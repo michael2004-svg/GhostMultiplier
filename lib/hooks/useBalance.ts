@@ -12,7 +12,6 @@ export function useBalance(userId?: string) {
 
     const supabase = createClient()
 
-    // Fetch initial balance
     supabase
       .from('users')
       .select('balance')
@@ -25,7 +24,6 @@ export function useBalance(userId?: string) {
         }
       })
 
-    // Real-time subscription
     const channel = supabase
       .channel(`balance:${userId}`)
       .on(

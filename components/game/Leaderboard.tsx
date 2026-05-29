@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { formatKES } from '@/lib/gameEngine'
 import type { LeaderboardEntry, VIPLevel } from '@/types/game'
 
@@ -76,3 +75,4 @@ export default function Leaderboard() {
     </div>
   )
 }
+
