@@ -5,15 +5,18 @@ import GameClient from './GameClient'
 
 export default async function GamePage() {
   const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!session) redirect('/login')
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (!user || error) redirect('/login')
 
-  const { data: user } = await supabase
+  const { data: profile } = await supabase
     .from('users')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
-  return <GameClient initialUser={user} />
+  if (!profile) redirect('/login')
+
+  return <GameClient initialUser={profile} />
 }
+
