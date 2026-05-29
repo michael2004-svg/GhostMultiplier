@@ -19,7 +19,11 @@ export default function LoginPage() {
       toast.error(error.message)
     } else {
       toast.success('Welcome back!')
-      router.push('/game')
+
+await supabase.auth.getSession()
+
+router.replace('/game')
+router.refresh()
     }
     setLoading(false)
   }
