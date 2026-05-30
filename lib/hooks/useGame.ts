@@ -1,134 +1,105 @@
 'use client'
 import { useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '@/store/gameStore'
-import { getSocket } from '@/lib/socket'
-import { getMultiplierAtTime } from '@/lib/multiplierUtils'
+import { createClient } from '@/lib/supabase/client'
 import type { Phase, Color, LivePlayer } from '@/types/game'
 
 export function useGame(userId?: string) {
   const store = useGameStore()
-  const tickerRef = useRef<NodeJS.Timeout | null>(null)
-  const phaseStartRef = useRef<number>(Date.now())
-  const maxMultiplierRef = useRef<number>(2)
-
-  const startMultiplierTick = useCallback((maxMult: number) => {
-    maxMultiplierRef.current = maxMult
-    phaseStartRef.current = Date.now()
-    if (tickerRef.current) clearInterval(tickerRef.current)
-
-    tickerRef.current = setInterval(() => {
-      const elapsed = (Date.now() - phaseStartRef.current) / 1000
-      if (elapsed >= 5) {
-        clearInterval(tickerRef.current!)
-        return
-      }
-      const value = getMultiplierAtTime(elapsed, maxMult)
-      store.setMultiplier(value, elapsed)
-    }, 100)
-  }, [store])
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
 
   useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_SOCKET_URL) return
+    const supabase = createClient()
 
-    let socket: ReturnType<typeof getSocket>
-    try {
-      socket = getSocket()
-    } catch {
-      return
-    }
-
-    socket.on('round:start', (data: {
-      roundId: string
-      roundNumber: number
-      hash: string
-      phase: Phase
-      phaseEndsAt: number
-      maxMultiplier: number
-    }) => {
-      store.startRound(data.roundId, data.roundNumber, data.hash)
-      store.setPhase('BETTING', data.phaseEndsAt)
-      maxMultiplierRef.current = data.maxMultiplier
+    const channel = supabase.channel('game', {
+      config: { broadcast: { listen: true } },
     })
 
-    socket.on('round:phase', (data: { phase: Phase; phaseEndsAt: number; maxMultiplier?: number }) => {
-      store.setPhase(data.phase, data.phaseEndsAt)
-      if (data.phase === 'MULTIPLIER') {
-        startMultiplierTick(data.maxMultiplier ?? maxMultiplierRef.current)
-      }
-      if (data.phase === 'LOCK' || data.phase === 'FLIP') {
-        if (tickerRef.current) clearInterval(tickerRef.current)
-      }
-    })
+    channelRef.current = channel
 
-    socket.on('round:flip', (data: { color: Color; serverSeed: string }) => {
-      store.setFlipResult(data.color)
-      if (data.color === 'JOKER') store.triggerJoker()
-    })
-
-    socket.on('round:end', () => {
-      store.endRound()
-    })
-
-    socket.on('feed:update', (player: LivePlayer) => {
-      store.addToFeed(player)
-    })
-
-    socket.on('players:count', (data: { count: number }) => {
-      store.setPlayerCount(data.count)
-    })
+    channel
+      .on('broadcast', { event: 'round:start' }, ({ payload }) => {
+        store.startRound(payload.roundId, payload.roundNumber, payload.hash)
+        store.setPhase('BETTING', payload.phaseEndsAt)
+      })
+      .on('broadcast', { event: 'round:phase' }, ({ payload }) => {
+        store.setPhase(payload.phase as Phase, payload.phaseEndsAt)
+        if (payload.phase === 'LOCK' || payload.phase === 'FLIP') {
+          // stop any local ticker
+        }
+      })
+      .on('broadcast', { event: 'round:multiplier' }, ({ payload }) => {
+        const elapsed = (Date.now() - (store.phaseEndsAt ?? Date.now() - 5000)) / 1000
+        store.setMultiplier(payload.value, elapsed)
+      })
+      .on('broadcast', { event: 'round:flip' }, ({ payload }) => {
+        store.setFlipResult(payload.color as Color)
+        if (payload.color === 'JOKER') store.triggerJoker()
+      })
+      .on('broadcast', { event: 'round:end' }, () => {
+        store.endRound()
+      })
+      .on('broadcast', { event: 'feed:update' }, ({ payload }) => {
+        store.addToFeed(payload as LivePlayer)
+      })
+      .subscribe()
 
     return () => {
-      try {
-        socket.off('round:start')
-        socket.off('round:phase')
-        socket.off('round:flip')
-        socket.off('round:end')
-        socket.off('feed:update')
-        socket.off('players:count')
-      } catch {}
-      if (tickerRef.current) clearInterval(tickerRef.current)
+      supabase.removeChannel(channel)
     }
-  }, [store, startMultiplierTick])
+  }, [store])
 
   const placeBet = useCallback(async (
     amount: number,
     colorChoice: 'RED' | 'BLACK'
   ) => {
     if (!store.roundId || !userId) return
-    try {
-      const socket = getSocket()
-      socket.emit('bet:place', {
-        roundId: store.roundId,
+
+    const res = await fetch('/api/bets/place', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         userId,
+        roundId: store.roundId,
         amount,
         colorChoice,
-      })
-    } catch {}
-    store.lockBet(amount, colorChoice)
+      }),
+    })
+
+    if (res.ok) {
+      store.lockBet(amount, colorChoice)
+    } else {
+      const { error } = await res.json()
+      throw new Error(error ?? 'Bet failed')
+    }
   }, [store, userId])
 
-  const cashOut = useCallback(() => {
+  const cashOut = useCallback(async () => {
     if (!store.roundId || !userId) return
-    try {
-      const socket = getSocket()
-      socket.emit('bet:cashout', {
-        roundId: store.roundId,
+
+    await fetch('/api/bets/cashout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         userId,
+        roundId: store.roundId,
         currentMultiplier: store.multiplier,
-      })
-    } catch {}
+      }),
+    })
   }, [store, userId])
 
-  const useToken = useCallback((tokenType: 'PEEK' | 'SHIELD' | 'DOUBLE_DOWN') => {
+  const useToken = useCallback(async (tokenType: 'PEEK' | 'SHIELD' | 'DOUBLE_DOWN') => {
     if (!store.roundId || !userId) return
-    try {
-      const socket = getSocket()
-      socket.emit('token:use', {
-        roundId: store.roundId,
+
+    await fetch('/api/tokens/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         userId,
+        roundId: store.roundId,
         tokenType,
-      })
-    } catch {}
+      }),
+    })
   }, [store, userId])
 
   return { placeBet, cashOut, useToken }

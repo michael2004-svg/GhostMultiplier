@@ -14,7 +14,6 @@ import JokerOverlay from '@/components/game/JokerOverlay'
 import VIPBar from '@/components/game/VIPBar'
 import { useGameStore } from '@/store/gameStore'
 import { useBalance } from '@/lib/hooks/useBalance'
-import { getSocket } from '@/lib/socket'
 import { formatMultiplier } from '@/lib/gameEngine'
 import { getMultiplierColor } from '@/lib/multiplierUtils'
 import type { User } from '@/types/user'
@@ -31,24 +30,22 @@ export default function GameClient({ initialUser }: GameClientProps) {
   const [soundOn, setSoundOn] = useState(false)
 
   useEffect(() => {
-    // Only connect socket if URL is configured
-    if (!process.env.NEXT_PUBLIC_SOCKET_URL) return
-
-    let socket: ReturnType<typeof getSocket>
+  if (!process.env.NEXT_PUBLIC_SOCKET_URL) return
+  let socket: ReturnType<typeof getSocket>
+  try {
+    socket = getSocket()
+    socket.emit('join:game', { userId: initialUser.id })
+  } catch (e) {
+    console.warn('Socket unavailable:', e)
+  }
+  return () => {
     try {
-      socket = getSocket()
-      socket.emit('join:game', { userId: initialUser.id })
-    } catch (e) {
-      console.warn('Socket unavailable:', e)
-    }
+      const s = getSocket()
+      s.emit('leave:game', { userId: initialUser.id })
+    } catch {}
+  }
+}, [initialUser.id])
 
-    return () => {
-      try {
-        const s = getSocket()
-        s.emit('leave:game', { userId: initialUser.id })
-      } catch {}
-    }
-  }, [initialUser.id])
 
   const secondsLeft = phaseEndsAt
     ? Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000))
