@@ -8,15 +8,15 @@ export interface User {
   balance: number
   total_wagered: number
   total_won: number
-  vip_level: VIPLevel
+  vipLevel: VIPLevel       // was vip_level
   xp: number
-  avatar_url?: string
+  avatarUrl?: string       // was avatar_url
   created_at: string
 }
 
 export interface Transaction {
   id: string
-  user_id: string
+  userId: string           // was user_id
   type: 'DEPOSIT' | 'WITHDRAW' | 'BET' | 'WIN' | 'BONUS'
   amount: number
   reference?: string
