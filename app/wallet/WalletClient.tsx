@@ -57,7 +57,7 @@ export default function WalletClient({ user, transactions }: Props) {
                 <div>
                   <div className="font-bold text-sm">{tx.type}</div>
                   <div className="text-xs text-gray-500">
-                    {new Date(tx.createdAt).toLocaleDateString()}
+                    {new Date(tx.created_at).toLocaleDateString()}
                   </div>
                 </div>
                 <div className="text-right">
