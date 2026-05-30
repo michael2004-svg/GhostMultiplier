@@ -15,77 +15,60 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  console.log('[CRON] ✅ Auth passed')
+
   const supabase = createServiceClient()
 
-  // Guard: don't start a new round if one is already running
-  const { data: activeRound } = await supabase
+  // Check env vars
+  console.log('[CRON] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+  console.log('[CRON] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+  console.log('[CRON] APP_URL:', process.env.NEXT_PUBLIC_APP_URL)
+
+  // Guard: don't start if round already running
+  const { data: activeRound, error: activeError } = await supabase
     .from('rounds')
-    .select('id')
+    .select('id, phase')
     .not('phase', 'in', '("RESOLUTION","IDLE")')
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
+  console.log('[CRON] Active round check:', { activeRound, activeError })
+
   if (activeRound) {
+    console.log('[CRON] Skipping — round already running:', activeRound)
     return NextResponse.json({ ok: true, skipped: 'round already running' })
   }
 
+  // Subscribe to broadcast channel
+  console.log('[CRON] Subscribing to broadcast channel...')
   const broadcastChannel = supabase.channel('game')
-  await new Promise<void>((resolve) => {
-    broadcastChannel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') resolve()
-    })
-  })
+  
+  const subscribeResult = await Promise.race([
+    new Promise<string>((resolve) => {
+      broadcastChannel.subscribe((status) => {
+        console.log('[CRON] Channel status:', status)
+        if (status === 'SUBSCRIBED') resolve('ok')
+      })
+    }),
+    new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 8000)),
+  ])
 
-  // Run one full round (~14s — well within 30s cron timeout)
-  await runOneRound(supabase, broadcastChannel)
-  await supabase.removeChannel(broadcastChannel)
+  console.log('[CRON] Subscribe result:', subscribeResult)
 
-  // Self-ping to chain the next round immediately without waiting for next cron tick
-  // The cron itself is the safety net if this ping ever fails
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (baseUrl) {
-    fetch(`${baseUrl}/api/cron/game`, {
-      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
-    }).catch(() => {})
+  if (subscribeResult === 'timeout') {
+    return NextResponse.json({ error: 'Channel subscribe timeout' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true })
-}
-
-async function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-async function broadcast(
-  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>,
-  event: string,
-  payload: object
-) {
-  await broadcastChannel.send({
-    type: 'broadcast',
-    event,
-    payload,
-  })
-}
-
-async function runOneRound(
-  supabase: ReturnType<typeof createServiceClient>,
-  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>
-) {
+  // Insert round
+  console.log('[CRON] Inserting round into DB...')
   const serverSeed = generateServerSeed()
   const clientSeed = generateClientSeed()
   const roundNumber = Date.now()
-
-  const { color, multiplier: maxMultiplier } = generateRoundOutcome(
-    serverSeed,
-    clientSeed,
-    String(roundNumber)
-  )
-
+  const { color, multiplier: maxMultiplier } = generateRoundOutcome(serverSeed, clientSeed, String(roundNumber))
   const hash = hashSeeds(serverSeed, clientSeed)
 
-  const { data: round } = await supabase
+  const { data: round, error: insertError } = await supabase
     .from('rounds')
     .insert({
       round_number: roundNumber,
@@ -97,141 +80,34 @@ async function runOneRound(
     .select()
     .single()
 
-  if (!round) return
+  console.log('[CRON] Round insert result:', { round: round?.id, insertError })
 
-  // ── BETTING PHASE (3s) ──
-  await broadcast(broadcastChannel, 'round:start', {
+  if (!round) {
+    return NextResponse.json({ error: 'Round insert failed', detail: insertError }, { status: 500 })
+  }
+
+  // Broadcast round:start
+  const broadcastResult = await broadcastChannel.send({
+    type: 'broadcast',
+    event: 'round:start',
+    payload: {
+      roundId: round.id,
+      roundNumber,
+      hash,
+      phase: 'BETTING',
+      phaseEndsAt: Date.now() + 3000,
+      maxMultiplier,
+    },
+  })
+  console.log('[CRON] round:start broadcast result:', broadcastResult)
+
+  // Return early with the round info so we can confirm this far works
+  return NextResponse.json({
+    ok: true,
+    debug: true,
     roundId: round.id,
-    roundNumber,
-    hash,
-    phase: 'BETTING',
-    phaseEndsAt: Date.now() + 3000,
-    maxMultiplier,
-  })
-  await sleep(3000)
-
-  // ── MULTIPLIER PHASE (5s) ──
-  await supabase.from('rounds').update({ phase: 'MULTIPLIER' }).eq('id', round.id)
-  await broadcast(broadcastChannel, 'round:phase', {
-    phase: 'MULTIPLIER',
-    phaseEndsAt: Date.now() + 5000,
-    maxMultiplier,
-  })
-
-  const tickStart = Date.now()
-  while (Date.now() - tickStart < 5000) {
-    const elapsed = (Date.now() - tickStart) / 1000
-    const progress = Math.min(elapsed / 5, 1)
-    const value = parseFloat(
-      (1.0 + (maxMultiplier - 1.0) * Math.pow(progress, 1.8)).toFixed(2)
-    )
-    await broadcast(broadcastChannel, 'round:multiplier', { value, timestamp: Date.now() })
-    await sleep(200)
-  }
-
-  // ── LOCK PHASE (1s) ──
-  await supabase.from('rounds').update({ phase: 'LOCK' }).eq('id', round.id)
-  await broadcast(broadcastChannel, 'round:phase', {
-    phase: 'LOCK',
-    phaseEndsAt: Date.now() + 1000,
-  })
-  await sleep(1000)
-
-  // ── FLIP PHASE (2s) ──
-  await supabase.from('rounds').update({ phase: 'FLIP' }).eq('id', round.id)
-  await broadcast(broadcastChannel, 'round:phase', {
-    phase: 'FLIP',
-    phaseEndsAt: Date.now() + 2000,
-  })
-  await broadcast(broadcastChannel, 'round:flip', {
     color,
-    serverSeed,
     maxMultiplier,
+    broadcastResult,
   })
-  await sleep(2000)
-
-  // ── RESOLUTION PHASE (3s) ──
-  await supabase
-    .from('rounds')
-    .update({
-      phase: 'RESOLUTION',
-      outcome_color: color,
-      crash_multiplier: maxMultiplier,
-      server_seed: serverSeed,
-      ended_at: new Date().toISOString(),
-    })
-    .eq('id', round.id)
-
-  await resolveBets(supabase, broadcastChannel, round.id, color, maxMultiplier)
-
-  await broadcast(broadcastChannel, 'round:end', {
-    outcome: { color, multiplier: maxMultiplier },
-    nextRoundIn: 3000,
-  })
-  await sleep(3000)
-}
-
-async function resolveBets(
-  supabase: ReturnType<typeof createServiceClient>,
-  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>,
-  roundId: string,
-  color: string,
-  maxMultiplier: number
-) {
-  const { data: bets } = await supabase
-    .from('bets')
-    .select('*')
-    .eq('round_id', roundId)
-    .is('outcome', null)
-
-  if (!bets?.length) return
-
-  for (const bet of bets) {
-    let outcome: string
-    let profit: number
-
-    if (color === 'JOKER') {
-      outcome = 'JOKER'
-      profit = -bet.amount
-    } else if (bet.color_choice === color) {
-      const payout = Math.floor(bet.amount * maxMultiplier)
-      profit = payout - bet.amount
-      outcome = 'WIN'
-      await supabase.rpc('increment_balance', {
-        user_id: bet.user_id,
-        amount: payout,
-      })
-      await supabase.rpc('add_xp', { user_id: bet.user_id, xp: 50 })
-    } else {
-      outcome = 'LOSS'
-      profit = -bet.amount
-    }
-
-    await supabase
-      .from('bets')
-      .update({ outcome, profit })
-      .eq('id', bet.id)
-
-    const { data: user } = await supabase
-      .from('users')
-      .select('username, avatar_url, vip_level')
-      .eq('id', bet.user_id)
-      .single()
-
-    await broadcastChannel.send({
-      type: 'broadcast',
-      event: 'feed:update',
-      payload: {
-        userId: bet.user_id,
-        username: user?.username ?? 'Player',
-        avatarUrl: user?.avatar_url,
-        vipLevel: user?.vip_level,
-        action: outcome,
-        amount: bet.amount,
-        color: bet.color_choice,
-        profit,
-        timestamp: Date.now(),
-      },
-    })
-  }
 }
