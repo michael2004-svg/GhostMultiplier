@@ -10,6 +10,7 @@ export function useBalance(userId?: string) {
   useEffect(() => {
     if (!userId) return
 
+    let cancelled = false
     const supabase = createClient()
 
     // Fetch initial balance
@@ -19,7 +20,7 @@ export function useBalance(userId?: string) {
       .eq('id', userId)
       .single()
       .then(({ data }) => {
-        if (data) {
+        if (!cancelled && data) {
           setBalance(data.balance ?? 0)
           prevBalance.current = data.balance ?? 0
         }
@@ -27,7 +28,7 @@ export function useBalance(userId?: string) {
 
     // Real-time subscription
     const channel = supabase
-      .channel(`balance:${userId}`)
+      .channel(`realtime:balance:${userId}`)
       .on(
         'postgres_changes',
         {
@@ -37,6 +38,7 @@ export function useBalance(userId?: string) {
           filter: `id=eq.${userId}`,
         },
         (payload) => {
+          if (cancelled) return
           const newBalance = payload.new.balance ?? 0
           if (newBalance > prevBalance.current) setFlashState('green')
           else if (newBalance < prevBalance.current) setFlashState('red')
@@ -48,6 +50,7 @@ export function useBalance(userId?: string) {
       .subscribe()
 
     return () => {
+      cancelled = true
       supabase.removeChannel(channel)
     }
   }, [userId])
