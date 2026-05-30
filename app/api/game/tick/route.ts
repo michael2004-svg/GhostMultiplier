@@ -17,7 +17,19 @@ export async function GET(req: Request) {
 
   const supabase = createServiceClient()
 
-  // Create one broadcast channel and subscribe it once
+  // Guard: don't start a new round if one is already running
+  const { data: activeRound } = await supabase
+    .from('rounds')
+    .select('id')
+    .not('phase', 'in', '("RESOLUTION","IDLE")')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (activeRound) {
+    return NextResponse.json({ ok: true, skipped: 'round already running' })
+  }
+
   const broadcastChannel = supabase.channel('game')
   await new Promise<void>((resolve) => {
     broadcastChannel.subscribe((status) => {
@@ -25,21 +37,20 @@ export async function GET(req: Request) {
     })
   })
 
-  // Fire and forget
-  runLoop(supabase, broadcastChannel)
+  // Run one full round (~14s — well within 30s cron timeout)
+  await runOneRound(supabase, broadcastChannel)
+  await supabase.removeChannel(broadcastChannel)
+
+  // Self-ping to chain the next round immediately without waiting for next cron tick
+  // The cron itself is the safety net if this ping ever fails
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (baseUrl) {
+    fetch(`${baseUrl}/api/cron/game`, {
+      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ ok: true })
-}
-
-async function runLoop(
-  supabase: ReturnType<typeof createServiceClient>,
-  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>
-) {
-  const deadline = Date.now() + 55_000
-  while (Date.now() < deadline) {
-    await runOneRound(supabase, broadcastChannel)
-  }
-  await supabase.removeChannel(broadcastChannel)
 }
 
 async function sleep(ms: number) {
