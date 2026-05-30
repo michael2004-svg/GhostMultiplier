@@ -14,8 +14,9 @@ import JokerOverlay from '@/components/game/JokerOverlay'
 import VIPBar from '@/components/game/VIPBar'
 import { useGameStore } from '@/store/gameStore'
 import { useBalance } from '@/lib/hooks/useBalance'
+import { useGame } from '@/lib/hooks/useGame'
 import { formatMultiplier } from '@/lib/gameEngine'
-import { getMultiplierColor } from '@/lib/rng'
+import { getMultiplierColor } from '@/lib/multiplierUtils'
 import type { User } from '@/types/user'
 
 interface GameClientProps {
@@ -28,13 +29,22 @@ export default function GameClient({ initialUser }: GameClientProps) {
   const phaseEndsAt = useGameStore((s) => s.phaseEndsAt)
   const { balance } = useBalance(initialUser.id)
   const [soundOn, setSoundOn] = useState(false)
+  const [secondsLeft, setSecondsLeft] = useState(0)
 
-  // useGame hook handles all Supabase Realtime subscriptions
-  // No socket needed here
+  // Connect to Supabase Realtime broadcasts
+  useGame(initialUser.id)
 
-  const secondsLeft = phaseEndsAt
-    ? Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000))
-    : 0
+  // Live countdown ticker
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (phaseEndsAt) {
+        setSecondsLeft(Math.max(0, Math.ceil((phaseEndsAt - Date.now()) / 1000)))
+      } else {
+        setSecondsLeft(0)
+      }
+    }, 250)
+    return () => clearInterval(interval)
+  }, [phaseEndsAt])
 
   const multColorClass = getMultiplierColor(multiplier)
   const multLabel = formatMultiplier(multiplier)
