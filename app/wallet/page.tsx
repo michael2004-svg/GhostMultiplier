@@ -1,20 +1,19 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import WalletClient from './WalletClient'
 
 export default async function WalletPage() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  const { data: user } = await supabase.from('users').select('*').eq('id', session.user.id).single()
+  const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single()
   const { data: transactions } = await supabase
     .from('transactions')
     .select('*')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
 
-  return <WalletClient user={user} transactions={transactions || []} />
+  return <WalletClient user={profile} transactions={transactions || []} />
 }

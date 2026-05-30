@@ -1,13 +1,11 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
 export default async function AdminPage() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  // Fetch admin stats
   const [{ count: totalPlayers }, { data: recentRounds }, { data: pendingWithdrawals }] =
     await Promise.all([
       supabase.from('users').select('*', { count: 'exact', head: true }),
@@ -23,7 +21,6 @@ export default async function AdminPage() {
           <h1 className="text-3xl font-black text-nk-gold">Admin Dashboard</h1>
         </div>
 
-        {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Total Players', value: totalPlayers ?? 0, icon: '👥' },
@@ -39,7 +36,6 @@ export default async function AdminPage() {
           ))}
         </div>
 
-        {/* Recent Rounds */}
         <div className="bg-[#0D0000] border border-[#D4AF3722] rounded-2xl p-6 mb-6">
           <h2 className="text-lg font-black mb-4">Recent Rounds</h2>
           <div className="overflow-x-auto">
@@ -84,7 +80,6 @@ export default async function AdminPage() {
           </div>
         </div>
 
-        {/* Pending withdrawals */}
         <div className="bg-[#0D0000] border border-[#D4AF3722] rounded-2xl p-6">
           <h2 className="text-lg font-black mb-4">
             Pending Withdrawals
