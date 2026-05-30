@@ -17,7 +17,7 @@ export default function RegisterPage() {
     e.preventDefault()
     setLoading(true)
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,

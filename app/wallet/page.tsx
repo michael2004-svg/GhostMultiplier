@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import WalletClient from './WalletClient'
 
 export default async function WalletPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import GameClient from './GameClient'
 
 export default async function GamePage() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user }, error } = await supabase.auth.getUser()
   if (!user || error) redirect('/login')

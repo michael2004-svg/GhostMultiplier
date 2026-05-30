@@ -4,7 +4,7 @@ import MobileNav from '@/components/layout/MobileNav'
 import Leaderboard from '@/components/game/Leaderboard'
 
 export default async function LeaderboardPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   return (

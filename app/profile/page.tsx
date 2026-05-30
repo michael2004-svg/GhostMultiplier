@@ -5,7 +5,7 @@ import MobileNav from '@/components/layout/MobileNav'
 import { getVIPProgress } from '@/lib/gameEngine'
 
 export default async function ProfilePage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

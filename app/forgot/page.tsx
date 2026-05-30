@@ -13,7 +13,7 @@ export default function ForgotPage() {
     e.preventDefault()
     setLoading(true)
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     })
