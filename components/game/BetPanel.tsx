@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { useGame } from '@/lib/hooks/useGame'
+import { getMultiplierColor } from '@/lib/multiplierUtils'
+import { formatMultiplier } from '@/lib/gameEngine'
 import toast from 'react-hot-toast'
 
 const QUICK_AMOUNTS = [100, 500, 1000, 5000, 10000]
@@ -21,7 +23,7 @@ export default function BetPanel({ userId, balance }: BetPanelProps) {
 
   const { placeBet, cashOut } = useGame(userId)
 
-  const canBet = phase === 'BETTING' && !myBet && userId
+  const canBet = phase === 'BETTING' && !myBet && !!userId
   const canCashOut = (phase === 'MULTIPLIER' || phase === 'LOCK') && myBet?.locked
 
   const handlePlaceBet = useCallback(async () => {
@@ -29,23 +31,28 @@ export default function BetPanel({ userId, balance }: BetPanelProps) {
     if (amount < 10) { toast.error('Minimum bet is 10 KES'); return }
     if (amount > balance) { toast.error('Insufficient balance'); return }
     await placeBet(amount, colorChoice)
-    toast.success(`Bet locked in at ${phase === 'BETTING' ? '2s' : 'now'}`)
-  }, [colorChoice, amount, balance, placeBet, phase])
+    toast.success('Bet locked in!')
+  }, [colorChoice, amount, balance, placeBet])
 
-  const potentialPayout = myBet ? Math.floor(myBet.amount * multiplier) : Math.floor(amount * multiplier)
+  const potentialPayout = myBet
+    ? Math.floor(myBet.amount * multiplier)
+    : Math.floor(amount * multiplier)
 
   return (
     <div className="space-y-4">
+
       {/* Color choice */}
       <div>
-        <div className="text-xs text-gray-500 text-center mb-2 uppercase tracking-wider">Choose Your Color</div>
+        <div className="text-xs text-gray-500 text-center mb-2 uppercase tracking-wider">
+          Choose Your Color
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setColorChoice('RED')}
             disabled={!canBet}
-            className={`btn-red py-4 px-3 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-all ${
+            className={`btn-red py-4 px-3 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
               colorChoice === 'RED' ? 'selected' : ''
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
+            }`}
           >
             <span>♦</span>
             <div className="text-left">
@@ -56,9 +63,9 @@ export default function BetPanel({ userId, balance }: BetPanelProps) {
           <button
             onClick={() => setColorChoice('BLACK')}
             disabled={!canBet}
-            className={`btn-black py-4 px-3 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-all ${
+            className={`btn-black py-4 px-3 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
               colorChoice === 'BLACK' ? 'selected' : ''
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
+            }`}
           >
             <span>♠</span>
             <div className="text-left">
@@ -69,10 +76,12 @@ export default function BetPanel({ userId, balance }: BetPanelProps) {
         </div>
       </div>
 
-      {/* Bet amount */}
+      {/* Amount input — only show before bet is locked */}
       {!myBet && (
         <div>
-          <div className="text-xs text-gray-500 text-center mb-2 uppercase tracking-wider">Bet Amount (KES)</div>
+          <div className="text-xs text-gray-500 text-center mb-2 uppercase tracking-wider">
+            Bet Amount (KES)
+          </div>
           <div className="flex items-center gap-2 bg-[#0D0000] border border-[#333] rounded-xl px-4 py-3 mb-2">
             <input
               type="number"
@@ -101,22 +110,31 @@ export default function BetPanel({ userId, balance }: BetPanelProps) {
         </div>
       )}
 
-      {/* Payout display */}
+      {/* Payout preview */}
       {(myBet || colorChoice) && (
         <div className="bg-[#0D0000] border border-[#D4AF3722] rounded-xl p-4 text-center">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Potential Payout</div>
-          <div className="text-2xl font-black text-nk-red">{potentialPayout.toLocaleString()} KES</div>
-          <div className="text-xs text-gray-500">Your Bet: {(myBet?.amount ?? amount).toLocaleString()} KES</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+            Potential Payout
+          </div>
+          <div className={`text-2xl font-black ${getMultiplierColor(multiplier)}`}>
+            {potentialPayout.toLocaleString()} KES
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            at {formatMultiplier(multiplier)} · Bet: {(myBet?.amount ?? amount).toLocaleString()} KES
+          </div>
         </div>
       )}
 
-      {/* Action buttons */}
+      {/* Cash out OR place bet */}
       {canCashOut ? (
         <button
           onClick={cashOut}
-          className="btn-cashout w-full py-4 rounded-xl font-black text-xl text-white transition-all"
+          className="btn-cashout w-full py-4 rounded-xl font-black text-xl text-white flex flex-col items-center gap-0.5"
         >
-          CASH OUT {multiplier.toFixed(2)}x
+          <span>CASH OUT</span>
+          <span className={`text-2xl ${getMultiplierColor(multiplier)}`}>
+            {formatMultiplier(multiplier)}
+          </span>
         </button>
       ) : (
         <button
@@ -124,16 +142,22 @@ export default function BetPanel({ userId, balance }: BetPanelProps) {
           disabled={!canBet}
           className="btn-place-bet w-full py-4 rounded-xl font-black text-lg text-white transition-all flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          PLACE BET (LOCK IN)
+          PLACE BET
           <span>🔒</span>
         </button>
       )}
 
-      {myBet && phase === 'MULTIPLIER' && (
+      {/* Locked bet status */}
+      {myBet && (phase === 'MULTIPLIER' || phase === 'LOCK') && (
         <div className="text-center text-xs text-gray-500">
-          BET LOCKED IN • {myBet.colorChoice} • {myBet.amount.toLocaleString()} KES
+          BET LOCKED ·{' '}
+          <span className={myBet.colorChoice === 'RED' ? 'text-red-400' : 'text-gray-300'}>
+            {myBet.colorChoice}
+          </span>
+          {' '}· {myBet.amount.toLocaleString()} KES
         </div>
       )}
+
     </div>
   )
 }

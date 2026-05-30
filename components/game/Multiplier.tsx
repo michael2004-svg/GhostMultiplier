@@ -1,6 +1,6 @@
 'use client'
 import { useGameStore } from '@/store/gameStore'
-import { getMultiplierColor } from '@/lib/rng'
+import { getMultiplierColor } from '@/lib/multiplierUtils'
 import { formatMultiplier } from '@/lib/gameEngine'
 import { useEffect, useRef } from 'react'
 
@@ -9,11 +9,10 @@ export default function Multiplier() {
   const phase = useGameStore((s) => s.phase)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Tick animation
   useEffect(() => {
     if (ref.current && phase === 'MULTIPLIER') {
       ref.current.classList.remove('animate-multiplier-tick')
-      void ref.current.offsetWidth // reflow
+      void ref.current.offsetWidth
       ref.current.classList.add('animate-multiplier-tick')
     }
   }, [multiplier, phase])
