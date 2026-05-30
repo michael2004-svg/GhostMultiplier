@@ -15,30 +15,28 @@ export function useRound(roundId?: string | null) {
 
     const supabase = createClient()
 
-    // Fetch initial round state
     supabase
       .from('rounds')
       .select('*')
       .eq('id', roundId)
       .single()
-      .then(({ data }) => {
-        if (data) setRound(data as Round)
+      .then(({ data }: { data: Round | null }) => {
+        if (data) setRound(data)
         setLoading(false)
       })
 
-    // Subscribe to phase changes on this round
     const channel = supabase
       .channel(`round:${roundId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'rounds',
           filter: `id=eq.${roundId}`,
         },
-        (payload) => {
-          setRound(payload.new as Round)
+        (payload: { new: Round }) => {
+          setRound(payload.new)
         }
       )
       .subscribe()
