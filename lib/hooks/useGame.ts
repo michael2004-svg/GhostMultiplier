@@ -11,9 +11,7 @@ export function useGame(userId?: string) {
   useEffect(() => {
     const supabase = createClient()
 
-    const channel = supabase.channel('game', {
-      config: { broadcast: { listen: true } },
-    })
+    const channel = supabase.channel('game')
 
     channelRef.current = channel
 
