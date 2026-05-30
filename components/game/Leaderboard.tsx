@@ -1,46 +1,96 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { formatKES } from '@/lib/gameEngine'
-import type { LeaderboardEntry, VIPLevel } from '@/types/game'
+import { createClient } from '@/lib/supabase/client'
 
 const TAB_LABELS = ['DAILY', 'WEEKLY', 'ALL TIME'] as const
 type Tab = typeof TAB_LABELS[number]
 
-function VIPBadge({ level }: { level: VIPLevel }) {
-  const colors: Record<VIPLevel, string> = {
-    Bronze: 'text-amber-600',
-    Silver: 'text-gray-400',
-    Gold: 'text-yellow-400',
-    Platinum: 'text-cyan-400',
-    Diamond: 'text-purple-400',
-  }
-  return <span className={`text-[9px] font-bold ${colors[level]}`}>{level.toUpperCase()}</span>
+interface LeaderboardEntry {
+  rank: number
+  username: string
+  avatar_url?: string
+  vip_level: string
+  total_profit: number
+}
+
+const VIP_COLORS: Record<string, string> = {
+  Bronze: 'text-amber-600',
+  Silver: 'text-gray-400',
+  Gold: 'text-yellow-400',
+  Platinum: 'text-cyan-400',
+  Diamond: 'text-purple-400',
 }
 
 export default function Leaderboard() {
   const [tab, setTab] = useState<Tab>('DAILY')
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Mock data for now — replace with actual Supabase query
-    setEntries([
-      { rank: 1, username: 'NairobiKing', vipLevel: 'Gold', totalProfit: 2450000, totalBets: 892, avatarUrl: '' },
-      { rank: 2, username: 'HighRoller', vipLevel: 'Silver', totalProfit: 1870000, totalBets: 654, avatarUrl: '' },
-      { rank: 3, username: 'QueenBee', vipLevel: 'Bronze', totalProfit: 1250000, totalBets: 412, avatarUrl: '' },
-      { rank: 4, username: 'Mfalme', vipLevel: 'Bronze', totalProfit: 945000, totalBets: 387, avatarUrl: '' },
-      { rank: 5, username: 'GameLord', vipLevel: 'Bronze', totalProfit: 832000, totalBets: 311, avatarUrl: '' },
-    ])
+    const supabase = createClient()
+    setLoading(true)
+
+    supabase
+      .from('bets')
+      .select(`
+        profit,
+        user_id,
+        users (
+          username,
+          avatar_url,
+          vip_level
+        )
+      `)
+      .not('profit', 'is', null)
+      .order('profit', { ascending: false })
+      .limit(10)
+      .then(({ data }) => {
+        if (!data) { setLoading(false); return }
+
+        // Aggregate profit per user
+        const map = new Map<string, LeaderboardEntry>()
+        data.forEach((bet: any) => {
+          const u = bet.users
+          if (!u) return
+          const existing = map.get(bet.user_id)
+          if (existing) {
+            existing.total_profit += bet.profit ?? 0
+          } else {
+            map.set(bet.user_id, {
+              rank: 0,
+              username: u.username ?? 'Player',
+              avatar_url: u.avatar_url,
+              vip_level: u.vip_level ?? 'Bronze',
+              total_profit: bet.profit ?? 0,
+            })
+          }
+        })
+
+        const sorted = Array.from(map.values())
+          .sort((a, b) => b.total_profit - a.total_profit)
+          .map((e, i) => ({ ...e, rank: i + 1 }))
+
+        setEntries(sorted)
+        setLoading(false)
+      })
   }, [tab])
 
-  const rankIcon = (r: number) => {
-    if (r === 1) return <span className="rank-1 text-lg">👑</span>
-    if (r === 2) return <span className="rank-2 text-base">🥈</span>
-    if (r === 3) return <span className="rank-3 text-base">🥉</span>
-    return <span className="text-gray-600 text-sm font-bold">{r}</span>
+  function rankIcon(r: number) {
+    if (r === 1) return <span className="text-yellow-400 text-lg">👑</span>
+    if (r === 2) return <span className="text-gray-400 text-base">🥈</span>
+    if (r === 3) return <span className="text-amber-600 text-base">🥉</span>
+    return <span className="text-gray-600 text-sm font-bold w-4 text-center">{r}</span>
+  }
+
+  function formatProfit(p: number) {
+    if (p >= 1_000_000) return `${(p / 1_000_000).toFixed(2)}M`
+    if (p >= 1_000) return `${(p / 1_000).toFixed(1)}K`
+    return p.toLocaleString()
   }
 
   return (
     <div className="flex flex-col h-full">
+      {/* Tabs */}
       <div className="flex gap-1 mb-3">
         {TAB_LABELS.map((t) => (
           <button
@@ -55,24 +105,45 @@ export default function Leaderboard() {
         ))}
       </div>
 
-      <div className="space-y-2 overflow-y-auto flex-1">
-        {entries.map((entry) => (
-          <div key={entry.username} className="flex items-center gap-2 py-2 border-b border-[#ffffff08]">
-            <div className="w-6 text-center flex-shrink-0">{rankIcon(entry.rank)}</div>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-nk-gold to-nk-red flex-shrink-0 flex items-center justify-center text-xs font-bold">
-              {entry.username[0]}
+      {/* Entries */}
+      <div className="space-y-1 overflow-y-auto flex-1">
+        {loading ? (
+          <div className="text-center text-gray-600 text-xs py-8">Loading...</div>
+        ) : entries.length === 0 ? (
+          <div className="text-center text-gray-600 text-xs py-8">No data yet</div>
+        ) : (
+          entries.map((entry) => (
+            <div
+              key={entry.username}
+              className="flex items-center gap-2 py-2 border-b border-[#ffffff08]"
+            >
+              <div className="w-6 flex items-center justify-center flex-shrink-0">
+                {rankIcon(entry.rank)}
+              </div>
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-nk-gold to-nk-red flex-shrink-0 flex items-center justify-center text-xs font-black">
+                {entry.avatar_url ? (
+                  <img
+                    src={entry.avatar_url}
+                    alt={entry.username}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  entry.username[0]?.toUpperCase()
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold truncate">{entry.username}</div>
+                <div className={`text-[9px] font-bold ${VIP_COLORS[entry.vip_level] ?? 'text-amber-600'}`}>
+                  {entry.vip_level?.toUpperCase()}
+                </div>
+              </div>
+              <div className="text-sm font-black text-nk-gold flex-shrink-0">
+                {formatProfit(entry.total_profit)} KES
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold truncate">{entry.username}</div>
-              <VIPBadge level={entry.vipLevel} />
-            </div>
-            <div className="text-right flex-shrink-0">
-              <div className="text-sm font-black text-nk-gold">{formatKES(entry.totalProfit)}</div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   )
 }
-

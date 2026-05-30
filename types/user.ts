@@ -6,20 +6,20 @@ export interface User {
   email: string
   phone?: string
   balance: number
-  totalWagered: number
-  totalWon: number
-  vipLevel: VIPLevel
+  total_wagered: number
+  total_won: number
+  vip_level: VIPLevel
   xp: number
-  avatarUrl?: string
-  createdAt: string
+  avatar_url?: string
+  created_at: string
 }
 
 export interface Transaction {
   id: string
-  userId: string
+  user_id: string
   type: 'DEPOSIT' | 'WITHDRAW' | 'BET' | 'WIN' | 'BONUS'
   amount: number
   reference?: string
   status: 'PENDING' | 'SUCCESS' | 'FAILED'
-  createdAt: string
+  created_at: string
 }
