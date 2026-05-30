@@ -7,8 +7,6 @@ import {
   hashSeeds,
 } from '@/lib/rng'
 
-// External cron calls this every minute.
-// We respond immediately and run the loop in the background.
 export const maxDuration = 60
 
 export async function GET(req: Request) {
@@ -19,17 +17,29 @@ export async function GET(req: Request) {
 
   const supabase = createServiceClient()
 
-  // Fire and forget — respond immediately so cron-job.org doesn't timeout
-  runLoop(supabase)
+  // Create one broadcast channel and subscribe it once
+  const broadcastChannel = supabase.channel('game')
+  await new Promise<void>((resolve) => {
+    broadcastChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') resolve()
+    })
+  })
+
+  // Fire and forget
+  runLoop(supabase, broadcastChannel)
 
   return NextResponse.json({ ok: true })
 }
 
-async function runLoop(supabase: ReturnType<typeof createServiceClient>) {
+async function runLoop(
+  supabase: ReturnType<typeof createServiceClient>,
+  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>
+) {
   const deadline = Date.now() + 55_000
   while (Date.now() < deadline) {
-    await runOneRound(supabase)
+    await runOneRound(supabase, broadcastChannel)
   }
+  await supabase.removeChannel(broadcastChannel)
 }
 
 async function sleep(ms: number) {
@@ -37,21 +47,24 @@ async function sleep(ms: number) {
 }
 
 async function broadcast(
-  supabase: ReturnType<typeof createServiceClient>,
+  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>,
   event: string,
   payload: object
 ) {
-  await supabase.channel('game').send({
+  await broadcastChannel.send({
     type: 'broadcast',
     event,
     payload,
   })
 }
 
-async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
+async function runOneRound(
+  supabase: ReturnType<typeof createServiceClient>,
+  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>
+) {
   const serverSeed = generateServerSeed()
   const clientSeed = generateClientSeed()
-  const roundNumber = Date.now() // unique enough for round ID
+  const roundNumber = Date.now()
 
   const { color, multiplier: maxMultiplier } = generateRoundOutcome(
     serverSeed,
@@ -61,7 +74,6 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
 
   const hash = hashSeeds(serverSeed, clientSeed)
 
-  // Insert round as BETTING
   const { data: round } = await supabase
     .from('rounds')
     .insert({
@@ -70,7 +82,6 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
       hash,
       phase: 'BETTING',
       started_at: new Date().toISOString(),
-      // server_seed revealed only after round ends
     })
     .select()
     .single()
@@ -78,7 +89,7 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
   if (!round) return
 
   // ── BETTING PHASE (3s) ──
-  await broadcast(supabase, 'round:start', {
+  await broadcast(broadcastChannel, 'round:start', {
     roundId: round.id,
     roundNumber,
     hash,
@@ -90,13 +101,12 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
 
   // ── MULTIPLIER PHASE (5s) ──
   await supabase.from('rounds').update({ phase: 'MULTIPLIER' }).eq('id', round.id)
-  await broadcast(supabase, 'round:phase', {
+  await broadcast(broadcastChannel, 'round:phase', {
     phase: 'MULTIPLIER',
     phaseEndsAt: Date.now() + 5000,
     maxMultiplier,
   })
 
-  // Tick multiplier every 200ms for 5 seconds
   const tickStart = Date.now()
   while (Date.now() - tickStart < 5000) {
     const elapsed = (Date.now() - tickStart) / 1000
@@ -104,13 +114,13 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
     const value = parseFloat(
       (1.0 + (maxMultiplier - 1.0) * Math.pow(progress, 1.8)).toFixed(2)
     )
-    await broadcast(supabase, 'round:multiplier', { value, timestamp: Date.now() })
+    await broadcast(broadcastChannel, 'round:multiplier', { value, timestamp: Date.now() })
     await sleep(200)
   }
 
   // ── LOCK PHASE (1s) ──
   await supabase.from('rounds').update({ phase: 'LOCK' }).eq('id', round.id)
-  await broadcast(supabase, 'round:phase', {
+  await broadcast(broadcastChannel, 'round:phase', {
     phase: 'LOCK',
     phaseEndsAt: Date.now() + 1000,
   })
@@ -118,13 +128,13 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
 
   // ── FLIP PHASE (2s) ──
   await supabase.from('rounds').update({ phase: 'FLIP' }).eq('id', round.id)
-  await broadcast(supabase, 'round:phase', {
+  await broadcast(broadcastChannel, 'round:phase', {
     phase: 'FLIP',
     phaseEndsAt: Date.now() + 2000,
   })
-  await broadcast(supabase, 'round:flip', {
+  await broadcast(broadcastChannel, 'round:flip', {
     color,
-    serverSeed, // reveal now
+    serverSeed,
     maxMultiplier,
   })
   await sleep(2000)
@@ -141,10 +151,9 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
     })
     .eq('id', round.id)
 
-  // Resolve all unresolved bets for this round
-  await resolveBets(supabase, round.id, color, maxMultiplier)
+  await resolveBets(supabase, broadcastChannel, round.id, color, maxMultiplier)
 
-  await broadcast(supabase, 'round:end', {
+  await broadcast(broadcastChannel, 'round:end', {
     outcome: { color, multiplier: maxMultiplier },
     nextRoundIn: 3000,
   })
@@ -153,6 +162,7 @@ async function runOneRound(supabase: ReturnType<typeof createServiceClient>) {
 
 async function resolveBets(
   supabase: ReturnType<typeof createServiceClient>,
+  broadcastChannel: ReturnType<ReturnType<typeof createServiceClient>['channel']>,
   roundId: string,
   color: string,
   maxMultiplier: number
@@ -191,14 +201,13 @@ async function resolveBets(
       .update({ outcome, profit })
       .eq('id', bet.id)
 
-    // Broadcast feed update
     const { data: user } = await supabase
       .from('users')
       .select('username, avatar_url, vip_level')
       .eq('id', bet.user_id)
       .single()
 
-    await supabase.channel('game').send({
+    await broadcastChannel.send({
       type: 'broadcast',
       event: 'feed:update',
       payload: {
