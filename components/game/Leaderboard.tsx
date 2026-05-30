@@ -44,7 +44,7 @@ export default function Leaderboard() {
       .not('profit', 'is', null)
       .order('profit', { ascending: false })
       .limit(10)
-      .then(({ data }) => {
+      .then(({ data }: { data: any[] | null }) => {
         if (!data) { setLoading(false); return }
 
         // Aggregate profit per user
@@ -147,4 +147,3 @@ export default function Leaderboard() {
     </div>
   )
 }
-
