@@ -1,7 +1,9 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { RealtimeChannel } from '@supabase/supabase-js'
+import type { RealtimeChannel, RealtimePostgresUpdatePayload } from '@supabase/supabase-js'
+
+type UserRow = { balance: number }
 
 export function useBalance(userId?: string) {
   const [balance, setBalance] = useState<number>(0)
@@ -25,7 +27,7 @@ export function useBalance(userId?: string) {
       .select('balance')
       .eq('id', userId)
       .single()
-      .then(({ data }: { data: { balance: number } | null }) => {
+      .then(({ data }: { data: UserRow | null }) => {
         if (data) {
           setBalance(data.balance ?? 0)
           prevBalance.current = data.balance ?? 0
@@ -34,7 +36,7 @@ export function useBalance(userId?: string) {
 
     const channel = supabase
       .channel(`balance:${userId}`)
-      .on(
+      .on<UserRow>(
         'postgres_changes',
         {
           event: 'UPDATE',
@@ -42,7 +44,7 @@ export function useBalance(userId?: string) {
           table: 'users',
           filter: `id=eq.${userId}`,
         },
-        (payload) => {
+        (payload: RealtimePostgresUpdatePayload<UserRow>) => {
           const newBalance = payload.new.balance ?? 0
           if (newBalance > prevBalance.current) setFlashState('green')
           else if (newBalance < prevBalance.current) setFlashState('red')
