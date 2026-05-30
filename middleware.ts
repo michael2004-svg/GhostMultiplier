@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const PUBLIC_ROUTES = ['/login', '/register', '/forgot', '/reset-password']
+const PROTECTED_ROUTES = ['/game', '/profile', '/wallet', '/history', '/leaderboard']
+
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -13,8 +18,6 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // CRITICAL: must write to request first, then rebuild response
-          // This ensures the refreshed session token reaches Server Components
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
@@ -29,13 +32,20 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protect /game routes
-  if (!user && request.nextUrl.pathname.startsWith('/game')) {
+  // Root redirect
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL(user ? '/game' : '/login', request.url))
+  }
+
+  // Protect routes — only redirect if on a protected path
+  const isProtected = PROTECTED_ROUTES.some(r => pathname.startsWith(r))
+  if (!user && isProtected) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Redirect logged-in users away from auth pages
-  if (user && ['/login', '/register', '/forgot'].includes(request.nextUrl.pathname)) {
+  const isPublic = PUBLIC_ROUTES.includes(pathname)
+  if (user && isPublic) {
     return NextResponse.redirect(new URL('/game', request.url))
   }
 
@@ -44,7 +54,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    /*
+     * Match all paths EXCEPT:
+     * - _next/static, _next/image (Next.js internals)
+     * - favicon.ico, static assets
+     * - api routes (handled separately)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
 
