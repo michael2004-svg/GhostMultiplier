@@ -2,8 +2,8 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { getSocket } from '@/lib/socket'
+import { getMultiplierAtTime } from '@/lib/multiplierUtils'
 import type { Phase, Color, LivePlayer } from '@/types/game'
-import { getMultiplierAtTime } from '@/lib/rng'
 
 export function useGame(userId?: string) {
   const store = useGameStore()
@@ -28,7 +28,14 @@ export function useGame(userId?: string) {
   }, [store])
 
   useEffect(() => {
-    const socket = getSocket()
+    if (!process.env.NEXT_PUBLIC_SOCKET_URL) return
+
+    let socket: ReturnType<typeof getSocket>
+    try {
+      socket = getSocket()
+    } catch {
+      return
+    }
 
     socket.on('round:start', (data: {
       roundId: string
@@ -43,10 +50,10 @@ export function useGame(userId?: string) {
       maxMultiplierRef.current = data.maxMultiplier
     })
 
-    socket.on('round:phase', (data: { phase: Phase; phaseEndsAt: number }) => {
+    socket.on('round:phase', (data: { phase: Phase; phaseEndsAt: number; maxMultiplier?: number }) => {
       store.setPhase(data.phase, data.phaseEndsAt)
       if (data.phase === 'MULTIPLIER') {
-        startMultiplierTick(maxMultiplierRef.current)
+        startMultiplierTick(data.maxMultiplier ?? maxMultiplierRef.current)
       }
       if (data.phase === 'LOCK' || data.phase === 'FLIP') {
         if (tickerRef.current) clearInterval(tickerRef.current)
@@ -71,12 +78,14 @@ export function useGame(userId?: string) {
     })
 
     return () => {
-      socket.off('round:start')
-      socket.off('round:phase')
-      socket.off('round:flip')
-      socket.off('round:end')
-      socket.off('feed:update')
-      socket.off('players:count')
+      try {
+        socket.off('round:start')
+        socket.off('round:phase')
+        socket.off('round:flip')
+        socket.off('round:end')
+        socket.off('feed:update')
+        socket.off('players:count')
+      } catch {}
       if (tickerRef.current) clearInterval(tickerRef.current)
     }
   }, [store, startMultiplierTick])
@@ -86,34 +95,40 @@ export function useGame(userId?: string) {
     colorChoice: 'RED' | 'BLACK'
   ) => {
     if (!store.roundId || !userId) return
-    const socket = getSocket()
-    socket.emit('bet:place', {
-      roundId: store.roundId,
-      userId,
-      amount,
-      colorChoice,
-    })
+    try {
+      const socket = getSocket()
+      socket.emit('bet:place', {
+        roundId: store.roundId,
+        userId,
+        amount,
+        colorChoice,
+      })
+    } catch {}
     store.lockBet(amount, colorChoice)
   }, [store, userId])
 
   const cashOut = useCallback(() => {
     if (!store.roundId || !userId) return
-    const socket = getSocket()
-    socket.emit('bet:cashout', {
-      roundId: store.roundId,
-      userId,
-      currentMultiplier: store.multiplier,
-    })
+    try {
+      const socket = getSocket()
+      socket.emit('bet:cashout', {
+        roundId: store.roundId,
+        userId,
+        currentMultiplier: store.multiplier,
+      })
+    } catch {}
   }, [store, userId])
 
   const useToken = useCallback((tokenType: 'PEEK' | 'SHIELD' | 'DOUBLE_DOWN') => {
     if (!store.roundId || !userId) return
-    const socket = getSocket()
-    socket.emit('token:use', {
-      roundId: store.roundId,
-      userId,
-      tokenType,
-    })
+    try {
+      const socket = getSocket()
+      socket.emit('token:use', {
+        roundId: store.roundId,
+        userId,
+        tokenType,
+      })
+    } catch {}
   }, [store, userId])
 
   return { placeBet, cashOut, useToken }

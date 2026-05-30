@@ -1,7 +1,7 @@
 'use client'
 import { useGameStore } from '@/store/gameStore'
 import { useGame } from '@/lib/hooks/useGame'
-import { getMultiplierColor } from '@/lib/rng'
+import { getMultiplierColor } from '@/lib/multiplierUtils'
 import { formatMultiplier } from '@/lib/gameEngine'
 
 interface CashOutButtonProps {
