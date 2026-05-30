@@ -7,7 +7,6 @@ const PROTECTED_ROUTES = ['/game', '/profile', '/wallet', '/history', '/leaderbo
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Build a mutable response we will return
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -19,11 +18,9 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // Write cookies onto both the request and the response
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          // Re-create response from the updated request so cookies flow through
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
@@ -33,18 +30,14 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: use getUser(), not getSession()
-  // getSession() can return stale data; getUser() hits the Supabase server
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Root redirect
+  // Root — redirect based on auth state
   if (pathname === '/') {
     return NextResponse.redirect(new URL(user ? '/game' : '/login', request.url))
   }
 
-  // Unauthenticated user trying to access a protected route
+  // Not logged in + trying to access protected route → go to login
   const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r))
   if (!user && isProtected) {
     const loginUrl = new URL('/login', request.url)
@@ -52,18 +45,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Authenticated user trying to access an auth page → send to game
-  const isPublicAuthPage = PUBLIC_ROUTES.includes(pathname)
+  // Logged in + on an auth page (login/register/etc) → go to game
+  // Use startsWith so /login?redirectTo=... still matches
+  const isPublicAuthPage = PUBLIC_ROUTES.some((r) => pathname.startsWith(r))
   if (user && isPublicAuthPage) {
     return NextResponse.redirect(new URL('/game', request.url))
   }
 
-  // Always return the response so cookies are forwarded
   return response
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    /*
+     * Match all paths EXCEPT Next.js internals, static files, and api routes.
+     * This prevents the middleware running on _next/data fetches which can
+     * cause false redirect loops.
+     */
+    '/((?!_next/static|_next/image|_next/data|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)',
   ],
 }
