@@ -28,7 +28,7 @@ export function useBalance(userId?: string) {
 
     // Real-time subscription
     const channel = supabase
-      .channel(`realtime:balance:${userId}`)
+      .channel(`balance:${userId}`)
       .on(
         'postgres_changes',
         {
