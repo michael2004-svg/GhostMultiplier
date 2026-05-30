@@ -1,17 +1,24 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { RealtimeChannel } from '@supabase/supabase-js'
+
+const supabase = createClient()
 
 export function useBalance(userId?: string) {
   const [balance, setBalance] = useState<number>(0)
   const [flashState, setFlashState] = useState<'green' | 'red' | null>(null)
   const prevBalance = useRef<number>(0)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   useEffect(() => {
     if (!userId) return
 
-    let cancelled = false
-    const supabase = createClient()
+    // Remove any existing channel before creating a new one
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
 
     // Fetch initial balance
     supabase
@@ -20,7 +27,7 @@ export function useBalance(userId?: string) {
       .eq('id', userId)
       .single()
       .then(({ data }) => {
-        if (!cancelled && data) {
+        if (data) {
           setBalance(data.balance ?? 0)
           prevBalance.current = data.balance ?? 0
         }
@@ -38,7 +45,6 @@ export function useBalance(userId?: string) {
           filter: `id=eq.${userId}`,
         },
         (payload) => {
-          if (cancelled) return
           const newBalance = payload.new.balance ?? 0
           if (newBalance > prevBalance.current) setFlashState('green')
           else if (newBalance < prevBalance.current) setFlashState('red')
@@ -49,9 +55,11 @@ export function useBalance(userId?: string) {
       )
       .subscribe()
 
+    channelRef.current = channel
+
     return () => {
-      cancelled = true
       supabase.removeChannel(channel)
+      channelRef.current = null
     }
   }, [userId])
 
