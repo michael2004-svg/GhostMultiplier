@@ -7,12 +7,11 @@ import {
   hashSeeds,
 } from '@/lib/rng'
 
-// Vercel cron calls this every minute.
-// We run multiple 13-second rounds per minute using a loop.
+// External cron calls this every minute.
+// We respond immediately and run the loop in the background.
 export const maxDuration = 60
 
 export async function GET(req: Request) {
-  // Verify it's coming from Vercel cron
   const authHeader = req.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -20,13 +19,17 @@ export async function GET(req: Request) {
 
   const supabase = createServiceClient()
 
-  // Run rounds for ~55 seconds (leave buffer before next cron fires)
+  // Fire and forget — respond immediately so cron-job.org doesn't timeout
+  runLoop(supabase)
+
+  return NextResponse.json({ ok: true })
+}
+
+async function runLoop(supabase: ReturnType<typeof createServiceClient>) {
   const deadline = Date.now() + 55_000
   while (Date.now() < deadline) {
     await runOneRound(supabase)
   }
-
-  return NextResponse.json({ ok: true })
 }
 
 async function sleep(ms: number) {
