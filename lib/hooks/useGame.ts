@@ -11,39 +11,42 @@ export function useGame(userId?: string) {
   useEffect(() => {
     const supabase = createClient()
 
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
     const channel = supabase.channel('game')
 
     channelRef.current = channel
 
     channel
-      .on('broadcast', { event: 'round:start' }, ({ payload }) => {
+      .on('broadcast' as any, { event: 'round:start' }, ({ payload }: { payload: any }) => {
         store.startRound(payload.roundId, payload.roundNumber, payload.hash)
         store.setPhase('BETTING', payload.phaseEndsAt)
       })
-      .on('broadcast', { event: 'round:phase' }, ({ payload }) => {
+      .on('broadcast' as any, { event: 'round:phase' }, ({ payload }: { payload: any }) => {
         store.setPhase(payload.phase as Phase, payload.phaseEndsAt)
-        if (payload.phase === 'LOCK' || payload.phase === 'FLIP') {
-          // stop any local ticker
-        }
       })
-      .on('broadcast', { event: 'round:multiplier' }, ({ payload }) => {
+      .on('broadcast' as any, { event: 'round:multiplier' }, ({ payload }: { payload: any }) => {
         const elapsed = (Date.now() - (store.phaseEndsAt ?? Date.now() - 5000)) / 1000
         store.setMultiplier(payload.value, elapsed)
       })
-      .on('broadcast', { event: 'round:flip' }, ({ payload }) => {
+      .on('broadcast' as any, { event: 'round:flip' }, ({ payload }: { payload: any }) => {
         store.setFlipResult(payload.color as Color)
         if (payload.color === 'JOKER') store.triggerJoker()
       })
-      .on('broadcast', { event: 'round:end' }, () => {
+      .on('broadcast' as any, { event: 'round:end' }, (_: any) => {
         store.endRound()
       })
-      .on('broadcast', { event: 'feed:update' }, ({ payload }) => {
+      .on('broadcast' as any, { event: 'feed:update' }, ({ payload }: { payload: any }) => {
         store.addToFeed(payload as LivePlayer)
       })
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
+      channelRef.current = null
     }
   }, [store])
 
