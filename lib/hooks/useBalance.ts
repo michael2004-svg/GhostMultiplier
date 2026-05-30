@@ -25,7 +25,7 @@ export function useBalance(userId?: string) {
       .select('balance')
       .eq('id', userId)
       .single()
-      .then(({ data }) => {
+      .then(({ data }: { data: { balance: number } | null }) => {
         if (data) {
           setBalance(data.balance ?? 0)
           prevBalance.current = data.balance ?? 0
