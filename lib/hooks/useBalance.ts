@@ -12,6 +12,7 @@ export function useBalance(userId?: string) {
 
     const supabase = createClient()
 
+    // Fetch initial balance
     supabase
       .from('users')
       .select('balance')
@@ -19,11 +20,12 @@ export function useBalance(userId?: string) {
       .single()
       .then(({ data }) => {
         if (data) {
-          setBalance(data.balance)
-          prevBalance.current = data.balance
+          setBalance(data.balance ?? 0)
+          prevBalance.current = data.balance ?? 0
         }
       })
 
+    // Real-time subscription
     const channel = supabase
       .channel(`balance:${userId}`)
       .on(
@@ -35,7 +37,7 @@ export function useBalance(userId?: string) {
           filter: `id=eq.${userId}`,
         },
         (payload) => {
-          const newBalance = payload.new.balance
+          const newBalance = payload.new.balance ?? 0
           if (newBalance > prevBalance.current) setFlashState('green')
           else if (newBalance < prevBalance.current) setFlashState('red')
           setBalance(newBalance)
@@ -45,9 +47,10 @@ export function useBalance(userId?: string) {
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [userId])
 
   return { balance, flashState }
 }
-

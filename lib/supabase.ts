@@ -1,6 +1,6 @@
-// lib/supabase.ts
-import { createClient } from '@/lib/supabase/client'
-import { createServiceClient } from '@/lib/supabase/server'
+// Browser-safe re-exports
+// Client components and hooks should import createClient from here
+// Server components and API routes should import directly from @/lib/supabase/server
 
-export const supabase = createClient()
-export const createServerSupabase = createServiceClient
+export { createClient } from '@/lib/supabase/client'
+export { createServiceClient as createServerSupabase } from '@/lib/supabase/server'
