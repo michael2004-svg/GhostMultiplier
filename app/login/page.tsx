@@ -21,15 +21,17 @@ export default function LoginPage() {
     if (error) {
       toast.error(error.message)
       setLoading(false)
-    } else {
-      toast.success('Welcome back!')
-      router.replace('/game')
+      return
     }
+
+    toast.success('Welcome back!')
+    // refresh() tells Next.js to re-run server components and middleware
+    // The middleware will then redirect to /game because the session is now set
+    router.refresh()
   }
 
   return (
     <div className="min-h-screen nairobi-bg flex items-center justify-center p-4">
-      {/* Ember particles */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(12)].map((_, i) => (
           <div
@@ -46,7 +48,6 @@ export default function LoginPage() {
       </div>
 
       <div className="w-full max-w-md relative">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
             <span className="text-4xl">👑</span>
@@ -57,7 +58,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="bg-[#0D0000] border border-[#D4AF3722] rounded-2xl p-8 shadow-2xl">
           <h1 className="text-2xl font-bold mb-6 text-center">Sign In</h1>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -109,4 +109,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
