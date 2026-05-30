@@ -4,43 +4,43 @@ import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import type { Phase, Color, LivePlayer } from '@/types/game'
 
+const supabase = createClient()
+
 export function useGame(userId?: string) {
   const store = useGameStore()
+  const storeRef = useRef(store)
+  storeRef.current = store
+
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+    // Only subscribe once — never re-run this effect
+    if (channelRef.current) return
 
     const channel = supabase.channel('game')
-
     channelRef.current = channel
 
     channel
       .on('broadcast' as any, { event: 'round:start' }, ({ payload }: { payload: any }) => {
-        store.startRound(payload.roundId, payload.roundNumber, payload.hash)
-        store.setPhase('BETTING', payload.phaseEndsAt)
+        storeRef.current.startRound(payload.roundId, payload.roundNumber, payload.hash)
+        storeRef.current.setPhase('BETTING', payload.phaseEndsAt)
       })
       .on('broadcast' as any, { event: 'round:phase' }, ({ payload }: { payload: any }) => {
-        store.setPhase(payload.phase as Phase, payload.phaseEndsAt)
+        storeRef.current.setPhase(payload.phase as Phase, payload.phaseEndsAt)
       })
       .on('broadcast' as any, { event: 'round:multiplier' }, ({ payload }: { payload: any }) => {
-        const elapsed = (Date.now() - (store.phaseEndsAt ?? Date.now() - 5000)) / 1000
-        store.setMultiplier(payload.value, elapsed)
+        const elapsed = (Date.now() - (storeRef.current.phaseEndsAt ?? Date.now() - 5000)) / 1000
+        storeRef.current.setMultiplier(payload.value, elapsed)
       })
       .on('broadcast' as any, { event: 'round:flip' }, ({ payload }: { payload: any }) => {
-        store.setFlipResult(payload.color as Color)
-        if (payload.color === 'JOKER') store.triggerJoker()
+        storeRef.current.setFlipResult(payload.color as Color)
+        if (payload.color === 'JOKER') storeRef.current.triggerJoker()
       })
       .on('broadcast' as any, { event: 'round:end' }, (_: any) => {
-        store.endRound()
+        storeRef.current.endRound()
       })
       .on('broadcast' as any, { event: 'feed:update' }, ({ payload }: { payload: any }) => {
-        store.addToFeed(payload as LivePlayer)
+        storeRef.current.addToFeed(payload as LivePlayer)
       })
       .subscribe()
 
@@ -48,7 +48,7 @@ export function useGame(userId?: string) {
       supabase.removeChannel(channel)
       channelRef.current = null
     }
-  }, [store])
+  }, []) // Empty array — subscribe once, never re-subscribe
 
   const placeBet = useCallback(async (
     amount: number,
