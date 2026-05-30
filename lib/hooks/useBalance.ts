@@ -3,8 +3,6 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
-const supabase = createClient()
-
 export function useBalance(userId?: string) {
   const [balance, setBalance] = useState<number>(0)
   const [flashState, setFlashState] = useState<'green' | 'red' | null>(null)
@@ -14,13 +12,14 @@ export function useBalance(userId?: string) {
   useEffect(() => {
     if (!userId) return
 
+    const supabase = createClient()
+
     // Remove any existing channel before creating a new one
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current)
       channelRef.current = null
     }
 
-    // Fetch initial balance
     supabase
       .from('users')
       .select('balance')
@@ -33,7 +32,6 @@ export function useBalance(userId?: string) {
         }
       })
 
-    // Real-time subscription
     const channel = supabase
       .channel(`balance:${userId}`)
       .on(
