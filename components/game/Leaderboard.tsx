@@ -8,9 +8,9 @@ type Tab = typeof TAB_LABELS[number]
 interface LeaderboardEntry {
   rank: number
   username: string
-  avatar_url?: string
-  vip_level: string
-  total_profit: number
+  avatarUrl?: string
+  vipLevel: string
+  totalProfit: number
 }
 
 const VIP_COLORS: Record<string, string> = {
@@ -54,20 +54,20 @@ export default function Leaderboard() {
           if (!u) return
           const existing = map.get(bet.user_id)
           if (existing) {
-            existing.total_profit += bet.profit ?? 0
+            existing.totalProfit += bet.profit ?? 0
           } else {
             map.set(bet.user_id, {
               rank: 0,
               username: u.username ?? 'Player',
-              avatar_url: u.avatar_url,
-              vip_level: u.vip_level ?? 'Bronze',
-              total_profit: bet.profit ?? 0,
+              avatarUrl: u.avatar_url,
+              vipLevel: u.vip_level ?? 'Bronze',
+              totalProfit: bet.profit ?? 0,
             })
           }
         })
 
         const sorted = Array.from(map.values())
-          .sort((a, b) => b.total_profit - a.total_profit)
+          .sort((a, b) => b.totalProfit - a.totalProfit)
           .map((e, i) => ({ ...e, rank: i + 1 }))
 
         setEntries(sorted)
@@ -121,9 +121,9 @@ export default function Leaderboard() {
                 {rankIcon(entry.rank)}
               </div>
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-nk-gold to-nk-red flex-shrink-0 flex items-center justify-center text-xs font-black">
-                {entry.avatar_url ? (
+                {entry.avatarUrl ? (
                   <img
-                    src={entry.avatar_url}
+                    src={entry.avatarUrl}
                     alt={entry.username}
                     className="w-full h-full rounded-full object-cover"
                   />
@@ -133,12 +133,12 @@ export default function Leaderboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold truncate">{entry.username}</div>
-                <div className={`text-[9px] font-bold ${VIP_COLORS[entry.vip_level] ?? 'text-amber-600'}`}>
-                  {entry.vip_level?.toUpperCase()}
+                <div className={`text-[9px] font-bold ${VIP_COLORS[entry.vipLevel] ?? 'text-amber-600'}`}>
+                  {entry.vipLevel?.toUpperCase()}
                 </div>
               </div>
               <div className="text-sm font-black text-nk-gold flex-shrink-0">
-                {formatProfit(entry.total_profit)} KES
+                {formatProfit(entry.totalProfit)} KES
               </div>
             </div>
           ))
@@ -147,3 +147,4 @@ export default function Leaderboard() {
     </div>
   )
 }
+

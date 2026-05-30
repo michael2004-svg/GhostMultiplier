@@ -24,7 +24,7 @@ const VIP_THRESHOLDS: Record<string, { min: number; max: number }> = {
 export default function VIPBar({ user }: VIPBarProps) {
   if (!user) return null
 
-  const level = user.vip_level ?? 'Bronze'
+  const level = user.vipLevel ?? 'Bronze'
   const color = VIP_COLORS[level] ?? '#CD7F32'
   const { min, max } = VIP_THRESHOLDS[level] ?? VIP_THRESHOLDS.Bronze
   const progress = max === min ? 100 : Math.min(100, ((user.xp - min) / (max - min)) * 100)
@@ -61,3 +61,4 @@ export default function VIPBar({ user }: VIPBarProps) {
     </div>
   )
 }
+
