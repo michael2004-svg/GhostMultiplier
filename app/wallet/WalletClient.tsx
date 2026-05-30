@@ -39,7 +39,7 @@ export default function WalletClient({ user, transactions }: Props) {
         <div className="grid grid-cols-2 gap-4 mb-6">
           {[
             { label: 'Total Wagered', value: user.total_wagered },
-            { label: 'Total Won', value: user.totalWon },
+            { label: 'Total Won', value: user.total_won },
           ].map((stat) => (
             <div key={stat.label} className="bg-[#0D0000] border border-[#D4AF3722] rounded-xl p-4">
               <div className="text-xs text-gray-500 mb-1">{stat.label}</div>
