@@ -15,7 +15,7 @@ export default function Card() {
       const t2 = setTimeout(() => setShowFace(true), 800)
       return () => { clearTimeout(t1); clearTimeout(t2) }
     }
-    if (phase === 'BETTING' || phase === 'IDLE') {
+    if (phase === 'BETTING' || phase === 'WAITING') {
       setFlipped(false)
       setShowFace(false)
     }
