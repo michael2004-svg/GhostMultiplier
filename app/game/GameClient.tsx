@@ -133,7 +133,7 @@ export default function GameClient({ initialUser }: GameClientProps) {
                 Next Round Starts In
               </div>
               <div className="text-3xl font-black text-nk-red">
-                {phase === 'RESOLUTION' || phase === 'IDLE' ? `${secondsLeft}s` : 'LIVE'}
+                {phase === 'RESOLUTION' || phase === 'WAITING' ? `${secondsLeft}s` : 'LIVE'}
               </div>
               <div className="flex gap-1 mt-2">
                 {[...Array(10)].map((_, i) => (
