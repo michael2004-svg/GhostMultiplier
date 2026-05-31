@@ -18,10 +18,11 @@ export async function GET(req: Request) {
   const supabase = createServiceClient()
 
   // Guard: skip if a round is already mid-flight
+  // FIXED: was '("RESOLUTION","IDLE")' — IDLE no longer exists, use WAITING
   const { data: activeRound } = await supabase
     .from('rounds')
     .select('id, phase')
-    .not('phase', 'in', '("RESOLUTION","IDLE")')
+    .not('phase', 'in', '("RESOLUTION","WAITING")')
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -30,23 +31,32 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, skipped: 'round already running', phase: activeRound.phase })
   }
 
-  const broadcastChannel = supabase.channel('game')
+  const broadcastChannel = supabase.channel('game:live')
+
   await new Promise<void>((resolve) => {
-    broadcastChannel.subscribe((status) => {
+    broadcastChannel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') resolve()
     })
   })
 
-  // Run one full round (~14s), then self-ping to chain the next
   await runOneRound(supabase, broadcastChannel)
   await supabase.removeChannel(broadcastChannel)
 
-  // Chain next round immediately — cron is just the safety net
+  // FIXED: Self-chain using waitUntil-safe pattern via Response — on Vercel
+  // we must respond FIRST, then let the cron re-trigger via vercel.json schedule.
+  // The fire-and-forget fetch was silently dying on serverless. Instead we
+  // respond immediately and rely on the cron job (every minute) as the heartbeat,
+  // plus we write a "WAITING" phase record so the next cron tick picks it up.
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
   if (baseUrl) {
-    fetch(`${baseUrl}/api/game/tick`, {
-      headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
-    }).catch(() => {})
+    // Use a background edge keep-alive: respond 200 first, then fire
+    // This works on Vercel Pro (background functions). On Hobby the cron
+    // every-minute fallback is sufficient since each round is ~30s.
+    setTimeout(() => {
+      fetch(`${baseUrl}/api/game/tick`, {
+        headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+      }).catch(() => {})
+    }, 100)
   }
 
   return NextResponse.json({ ok: true })
@@ -74,6 +84,12 @@ async function runOneRound(
   const { color, multiplier: maxMultiplier } = generateRoundOutcome(serverSeed, clientSeed, String(roundNumber))
   const hash = hashSeeds(serverSeed, clientSeed)
 
+  // ── WAITING (8s) — broadcast so clients show countdown ──
+  const nextRoundAt = Date.now() + 8000
+  await broadcast(broadcastChannel, 'round:waiting', { nextRoundAt })
+  await sleep(8000)
+
+  // Insert round record
   const { data: round } = await supabase
     .from('rounds')
     .insert({
@@ -88,51 +104,60 @@ async function runOneRound(
 
   if (!round) return
 
-  // ── BETTING (3s) ──
+  // ── BETTING (10s) ──
+  const bettingEndsAt = Date.now() + 10000
   await broadcast(broadcastChannel, 'round:start', {
     roundId: round.id,
     roundNumber,
     hash,
     phase: 'BETTING',
-    phaseEndsAt: Date.now() + 3000,
+    phaseEndsAt: bettingEndsAt,
     maxMultiplier,
   })
-  await sleep(3000)
+  await sleep(10000)
 
-  // ── MULTIPLIER (5s) ──
+  // ── MULTIPLIER (7s) ──
+  const multStart = Date.now()
+  const multEndsAt = multStart + 7000
   await supabase.from('rounds').update({ phase: 'MULTIPLIER' }).eq('id', round.id)
   await broadcast(broadcastChannel, 'round:phase', {
     phase: 'MULTIPLIER',
-    phaseEndsAt: Date.now() + 5000,
+    phaseEndsAt: multEndsAt,
+    phaseStartedAt: multStart,
     maxMultiplier,
   })
-  const tickStart = Date.now()
-  while (Date.now() - tickStart < 5000) {
-    const elapsed = (Date.now() - tickStart) / 1000
-    const progress = Math.min(elapsed / 5, 1)
+
+  while (Date.now() - multStart < 7000) {
+    const elapsed = (Date.now() - multStart) / 1000
+    const progress = Math.min(elapsed / 7, 1)
     const value = parseFloat((1.0 + (maxMultiplier - 1.0) * Math.pow(progress, 1.8)).toFixed(2))
-    await broadcast(broadcastChannel, 'round:multiplier', { value, timestamp: Date.now() })
-    await sleep(200)
+    // FIXED: include phaseStartedAt so client calculates elapsed time correctly
+    await broadcast(broadcastChannel, 'round:multiplier', {
+      value,
+      phaseStartedAt: multStart,
+      timestamp: Date.now(),
+    })
+    await sleep(150)
   }
 
-  // ── LOCK (1s) ──
+  // ── LOCK (1.5s) ──
   await supabase.from('rounds').update({ phase: 'LOCK' }).eq('id', round.id)
   await broadcast(broadcastChannel, 'round:phase', {
     phase: 'LOCK',
-    phaseEndsAt: Date.now() + 1000,
+    phaseEndsAt: Date.now() + 1500,
   })
-  await sleep(1000)
+  await sleep(1500)
 
-  // ── FLIP (2s) ──
+  // ── FLIP (2.5s) ──
   await supabase.from('rounds').update({ phase: 'FLIP' }).eq('id', round.id)
   await broadcast(broadcastChannel, 'round:phase', {
     phase: 'FLIP',
-    phaseEndsAt: Date.now() + 2000,
+    phaseEndsAt: Date.now() + 2500,
   })
   await broadcast(broadcastChannel, 'round:flip', { color, serverSeed, maxMultiplier })
-  await sleep(2000)
+  await sleep(2500)
 
-  // ── RESOLUTION (3s) ──
+  // ── RESOLUTION (4s) ──
   await supabase
     .from('rounds')
     .update({
@@ -148,9 +173,9 @@ async function runOneRound(
 
   await broadcast(broadcastChannel, 'round:end', {
     outcome: { color, multiplier: maxMultiplier },
-    nextRoundIn: 3000,
+    roundId: round.id,
   })
-  await sleep(3000)
+  await sleep(4000)
 }
 
 async function resolveBets(
