@@ -90,7 +90,7 @@ export function useGame(userId?: string) {
       .on('broadcast' as any, { event: 'players:count' }, ({ payload }: { payload: any }) => {
         storeRef.current.setPlayerCount(payload.count)
       })
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           // Re-sync state after reconnect
           fetchCurrentGameState().then((state) => {
