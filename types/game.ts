@@ -1,4 +1,4 @@
-export type Phase = 'BETTING' | 'MULTIPLIER' | 'LOCK' | 'FLIP' | 'RESOLUTION' | 'IDLE'
+export type Phase = 'WAITING' | 'BETTING' | 'MULTIPLIER' | 'LOCK' | 'FLIP' | 'RESOLUTION'
 export type Color = 'RED' | 'BLACK' | 'JOKER'
 export type BetOutcome = 'WIN' | 'LOSS' | 'CASHOUT' | 'JOKER' | null
 export type TokenType = 'PEEK' | 'SHIELD' | 'DOUBLE_DOWN'
@@ -60,6 +60,7 @@ export interface GameState {
   multiplier: number
   multiplierHistory: { t: number; v: number }[]
   phaseEndsAt: number | null
+  nextRoundAt: number | null
   outcomeColor: Color | null
   crashMultiplier: number | null
   playerCount: number
@@ -71,7 +72,7 @@ export interface GameState {
     locked: boolean
   } | null
   jokerActive: boolean
-  jokerCountdown: number // rounds until next possible joker
+  jokerCountdown: number
 }
 
 export interface PowerUpToken {
@@ -83,25 +84,7 @@ export interface PowerUpToken {
 }
 
 export const POWER_UP_TOKENS: PowerUpToken[] = [
-  {
-    type: 'PEEK',
-    cost: 5,
-    description: '60% accuracy',
-    icon: '👁',
-    label: 'PEEK TOKEN',
-  },
-  {
-    type: 'SHIELD',
-    cost: 10,
-    description: 'Protects 50%',
-    icon: '🛡',
-    label: 'SHIELD TOKEN',
-  },
-  {
-    type: 'DOUBLE_DOWN',
-    cost: 20,
-    description: 'Double your bet',
-    icon: '2×',
-    label: 'DOUBLE DOWN',
-  },
+  { type: 'PEEK', cost: 5, description: '60% accuracy', icon: '👁', label: 'PEEK TOKEN' },
+  { type: 'SHIELD', cost: 10, description: 'Protects 50%', icon: '🛡', label: 'SHIELD TOKEN' },
+  { type: 'DOUBLE_DOWN', cost: 20, description: 'Double your bet', icon: '2×', label: 'DOUBLE DOWN' },
 ]

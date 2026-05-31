@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
@@ -12,19 +12,25 @@ export function useBalance(userId?: string) {
   const prevBalance = useRef<number>(0)
   const channelRef = useRef<RealtimeChannel | null>(null)
 
+  const applyBalance = useCallback((newBalance: number) => {
+    if (newBalance > prevBalance.current) setFlashState('green')
+    else if (newBalance < prevBalance.current) setFlashState('red')
+    setBalance(newBalance)
+    prevBalance.current = newBalance
+    setTimeout(() => setFlashState(null), 800)
+  }, [])
+
   useEffect(() => {
     if (!userId) return
 
-    // Unique channel name per mount prevents "after subscribe()" collision
-    // when React strict mode double-fires the effect
     const channelName = `balance:${userId}:${++mountCount}`
 
-    // Remove any existing channel before creating a new one
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current)
       channelRef.current = null
     }
 
+    // Initial fetch
     supabase
       .from('users')
       .select('balance')
@@ -37,34 +43,38 @@ export function useBalance(userId?: string) {
         }
       })
 
+    // Realtime subscription
     const channel = supabase
       .channel(channelName)
       .on(
         'postgres_changes' as any,
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'users',
-          filter: `id=eq.${userId}`,
-        },
+        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
         (payload: { new: { balance: number } }) => {
-          const newBalance = payload.new.balance ?? 0
-          if (newBalance > prevBalance.current) setFlashState('green')
-          else if (newBalance < prevBalance.current) setFlashState('red')
-          setBalance(newBalance)
-          prevBalance.current = newBalance
-          setTimeout(() => setFlashState(null), 600)
+          applyBalance(payload.new.balance ?? 0)
         }
       )
       .subscribe()
 
     channelRef.current = channel
 
+    // Polling fallback: every 8s re-fetch balance in case realtime misses webhook update
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('balance')
+        .eq('id', userId)
+        .single()
+      if (data && data.balance !== prevBalance.current) {
+        applyBalance(data.balance ?? 0)
+      }
+    }, 8000)
+
     return () => {
+      clearInterval(poll)
       supabase.removeChannel(channel)
       channelRef.current = null
     }
-  }, [userId])
+  }, [userId, applyBalance])
 
   return { balance, flashState }
 }

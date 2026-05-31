@@ -208,3 +208,53 @@ body {
   border-radius: 50%;
   pointer-events: none;
 }
+/* Modal entrance */
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-modal-in {
+  animation: modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Live feed item entrance */
+@keyframes feed-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-feed-in {
+  animation: feed-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Card flip for FLIP phase */
+@keyframes card-flip {
+  0%   { transform: rotateY(0deg); }
+  50%  { transform: rotateY(90deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+/* Multiplier tick */
+@keyframes multiplier-tick {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.animate-multiplier-tick {
+  animation: multiplier-tick 0.12s ease-out;
+}
+
+/* Balance flash */
+@keyframes balance-flash-green {
+  0%, 100% { background-color: transparent; }
+  50%       { background-color: rgba(74, 222, 128, 0.15); }
+}
+@keyframes balance-flash-red {
+  0%, 100% { background-color: transparent; }
+  50%       { background-color: rgba(248, 113, 113, 0.15); }
+}
+.animate-balance-flash-green {
+  animation: balance-flash-green 0.6s ease-in-out;
+}
+.animate-balance-flash-red {
+  animation: balance-flash-red 0.6s ease-in-out;
+}

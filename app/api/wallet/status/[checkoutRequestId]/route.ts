@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPaymentStatus } from '@/lib/mpesa'
-import { createServerSupabase } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   req: NextRequest,
@@ -12,9 +14,9 @@ export async function GET(
     const status = await checkPaymentStatus(checkoutRequestId)
 
     if (status.status === 'completed') {
-      const supabase = createServerSupabase()
+      const supabase = createServiceClient()
 
-      // Get transaction
+      // Idempotent: only credit once — check current status first
       const { data: tx } = await supabase
         .from('transactions')
         .select('*')
@@ -22,17 +24,29 @@ export async function GET(
         .single()
 
       if (tx && tx.status === 'PENDING') {
-        // Update transaction
-        await supabase
+        // Mark transaction as SUCCESS first (prevents race condition double-credit)
+        const { error: updateErr } = await supabase
           .from('transactions')
-          .update({ status: 'SUCCESS' })
+          .update({ status: 'SUCCESS', mpesa_receipt: status.mpesaReceiptNumber ?? null })
           .eq('reference', checkoutRequestId)
+          .eq('status', 'PENDING') // only update if still PENDING (optimistic lock)
 
-        // Update balance
-        await supabase.rpc('increment_balance', {
-          user_id: tx.user_id,
-          amount: tx.amount,
-        })
+        if (!updateErr) {
+          // Only increment balance if we successfully flipped status
+          const { error: rpcErr } = await supabase.rpc('increment_balance', {
+            user_id: tx.user_id,
+            amount: tx.amount,
+          })
+
+          if (rpcErr) {
+            // Balance increment failed — roll back transaction status
+            await supabase
+              .from('transactions')
+              .update({ status: 'PENDING' })
+              .eq('reference', checkoutRequestId)
+            console.error('Balance increment failed:', rpcErr)
+          }
+        }
       }
     }
 

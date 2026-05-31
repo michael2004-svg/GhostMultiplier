@@ -17,7 +17,7 @@ export async function triggerSTKPush(params: {
   })
 
   if (!response.ok) {
-    const err = await response.json()
+    const err = await response.json().catch(() => ({}))
     throw new Error(err.message || 'STK Push failed')
   }
 
@@ -34,7 +34,9 @@ export async function checkPaymentStatus(checkoutRequestId: string): Promise<{
     `${NEXUS_BASE_URL}/api/payments/status/${checkoutRequestId}`,
     {
       headers: { 'X-API-Key': NEXUS_SECRET_KEY },
-    }
+      // Short cache to prevent hammering the payment provider
+      next: { revalidate: 0 },
+    } as RequestInit
   )
 
   if (!response.ok) {
@@ -42,22 +44,6 @@ export async function checkPaymentStatus(checkoutRequestId: string): Promise<{
   }
 
   return response.json()
-}
-
-export async function pollPaymentStatus(
-  checkoutRequestId: string,
-  onUpdate: (status: string) => void,
-  maxAttempts = 24
-): Promise<'completed' | 'failed' | 'cancelled'> {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, 5000))
-    const result = await checkPaymentStatus(checkoutRequestId)
-    onUpdate(result.status)
-    if (result.status === 'completed') return 'completed'
-    if (result.status === 'failed') return 'failed'
-    if (result.status === 'cancelled') return 'cancelled'
-  }
-  return 'failed'
 }
 
 export function formatPhoneNumber(phone: string): string {

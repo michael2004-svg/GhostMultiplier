@@ -1,12 +1,12 @@
 import type { Phase } from '@/types/game'
 
 export const PHASE_DURATIONS: Record<Phase, number> = {
-  IDLE: 0,
-  BETTING: 2000,
-  MULTIPLIER: 5000,
-  LOCK: 1000,
-  FLIP: 2000,
-  RESOLUTION: 3000,
+  WAITING: 8000,     // 8s between rounds
+  BETTING: 10000,    // 10s betting window
+  MULTIPLIER: 7000,  // 7s multiplier run
+  LOCK: 1500,        // 1.5s lock
+  FLIP: 2500,        // 2.5s card flip
+  RESOLUTION: 4000,  // 4s result display
 }
 
 export const PHASE_SEQUENCE: Phase[] = [
@@ -18,9 +18,10 @@ export const PHASE_SEQUENCE: Phase[] = [
 ]
 
 export function getNextPhase(current: Phase): Phase {
+  if (current === 'RESOLUTION') return 'WAITING'
   const idx = PHASE_SEQUENCE.indexOf(current)
-  if (idx === -1 || idx === PHASE_SEQUENCE.length - 1) return 'BETTING'
-  return PHASE_SEQUENCE[idx + 1]
+  if (idx === -1) return 'WAITING'
+  return PHASE_SEQUENCE[idx + 1] ?? 'WAITING'
 }
 
 export function getPhaseDuration(phase: Phase): number {
@@ -33,7 +34,7 @@ export function formatMultiplier(value: number): string {
 
 export function formatKES(amount: number): string {
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(2)}M KES`
-  if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K KES`
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(1)}K KES`
   return `${amount.toLocaleString()} KES`
 }
 

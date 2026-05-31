@@ -4,6 +4,7 @@ import type { Phase, Color, LivePlayer, GameState } from '@/types/game'
 interface GameStore extends GameState {
   setPhase: (phase: Phase, phaseEndsAt: number) => void
   startRound: (roundId: string, roundNumber: number, hash: string) => void
+  setWaiting: (nextRoundAt: number) => void
   setMultiplier: (value: number, t: number) => void
   setFlipResult: (color: Color) => void
   lockBet: (amount: number, colorChoice: 'RED' | 'BLACK') => void
@@ -12,16 +13,19 @@ interface GameStore extends GameState {
   endRound: () => void
   addToFeed: (player: LivePlayer) => void
   setPlayerCount: (count: number) => void
+  setRecentResults: (results: Color[]) => void
+  syncFromServer: (state: Partial<GameState>) => void
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
-  phase: 'IDLE',
+  phase: 'WAITING',
   roundId: null,
   roundNumber: 0,
   hash: null,
   multiplier: 1.0,
   multiplierHistory: [],
   phaseEndsAt: null,
+  nextRoundAt: null,
   outcomeColor: null,
   crashMultiplier: null,
   playerCount: 0,
@@ -44,7 +48,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     crashMultiplier: null,
     myBet: null,
     jokerActive: false,
+    nextRoundAt: null,
   }),
+
+  setWaiting: (nextRoundAt) => set({ phase: 'WAITING', nextRoundAt }),
 
   setMultiplier: (value, t) => set((s) => ({
     multiplier: value,
@@ -71,4 +78,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   })),
 
   setPlayerCount: (count) => set({ playerCount: count }),
+
+  setRecentResults: (results) => set({ recentResults: results }),
+
+  syncFromServer: (state) => set((s) => ({ ...s, ...state })),
 }))

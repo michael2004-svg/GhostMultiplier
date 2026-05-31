@@ -1,41 +1,80 @@
 'use client'
 import { useGameStore } from '@/store/gameStore'
+import { useEffect, useState } from 'react'
 import type { Phase } from '@/types/game'
 
-const PHASES: { key: Phase; label: string; time: string }[] = [
-  { key: 'BETTING', label: 'BETTING', time: '0s – 2s' },
-  { key: 'MULTIPLIER', label: 'MULTIPLIER', time: '2s – 7s' },
-  { key: 'LOCK', label: 'LOCK', time: '7s – 8s' },
-  { key: 'FLIP', label: 'FLIP', time: '8s – 10s' },
-  { key: 'RESOLUTION', label: 'RESOLUTION', time: '10s – 13s' },
+const ACTIVE_PHASES: { key: Phase; label: string; icon: string }[] = [
+  { key: 'BETTING', label: 'Betting', icon: '🎯' },
+  { key: 'MULTIPLIER', label: 'Rising', icon: '📈' },
+  { key: 'LOCK', label: 'Locked', icon: '🔒' },
+  { key: 'FLIP', label: 'Flip', icon: '🃏' },
+  { key: 'RESOLUTION', label: 'Result', icon: '🏆' },
 ]
 
 export default function PhaseTracker() {
   const phase = useGameStore((s) => s.phase)
   const phaseEndsAt = useGameStore((s) => s.phaseEndsAt)
+  const roundNumber = useGameStore((s) => s.roundNumber)
 
-  const activeIdx = PHASES.findIndex((p) => p.key === phase)
-  const progress = activeIdx / (PHASES.length - 1)
+  const [msLeft, setMsLeft] = useState(0)
+
+  useEffect(() => {
+    if (!phaseEndsAt || phase === 'WAITING') return
+    const tick = () => setMsLeft(Math.max(0, phaseEndsAt - Date.now()))
+    tick()
+    const id = setInterval(tick, 100)
+    return () => clearInterval(id)
+  }, [phaseEndsAt, phase])
+
+  if (phase === 'WAITING') {
+    return (
+      <div className="flex items-center justify-between text-xs text-gray-600">
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-gray-600 animate-pulse" />
+          Waiting for next round
+        </span>
+        {roundNumber > 0 && (
+          <span className="font-mono text-gray-700">#{roundNumber.toString().padStart(6, '0')}</span>
+        )}
+      </div>
+    )
+  }
+
+  const activeIdx = ACTIVE_PHASES.findIndex((p) => p.key === phase)
 
   return (
-    <div className="w-full">
-      <div className="flex justify-between items-start mb-2">
-        {PHASES.map((p, i) => (
-          <div key={p.key} className={`flex flex-col items-center text-center flex-1 ${i === activeIdx ? 'phase-active' : 'phase-inactive'}`}>
-            <span className={`text-[10px] sm:text-xs font-bold tracking-wider pb-1 ${i === activeIdx ? 'text-nk-gold border-b-2 border-nk-gold' : 'text-gray-600'}`}>
-              {p.label}
-            </span>
-            <span className={`text-[9px] mt-1 hidden sm:block ${i === activeIdx ? 'text-nk-gold' : 'text-gray-700'}`}>
-              {p.time}
-            </span>
-          </div>
-        ))}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          {ACTIVE_PHASES.map((p, i) => (
+            <div key={p.key} className="flex items-center gap-1">
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all duration-300 ${
+                i === activeIdx
+                  ? 'bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40'
+                  : i < activeIdx
+                    ? 'text-gray-600'
+                    : 'text-gray-700'
+              }`}>
+                {i === activeIdx && <span>{p.icon}</span>}
+                <span>{p.label}</span>
+              </div>
+              {i < ACTIVE_PHASES.length - 1 && (
+                <span className={`text-[8px] ${i < activeIdx ? 'text-gray-600' : 'text-gray-800'}`}>›</span>
+              )}
+            </div>
+          ))}
+        </div>
+        {phaseEndsAt && msLeft > 0 && (
+          <span className="text-[10px] font-mono text-gray-500">
+            {(msLeft / 1000).toFixed(1)}s
+          </span>
+        )}
       </div>
       {/* Progress bar */}
-      <div className="h-0.5 bg-[#1A0000] rounded-full mt-1">
+      <div className="h-px bg-white/5 rounded-full overflow-hidden">
         <div
-          className="h-full bg-nk-gold rounded-full transition-all duration-300"
-          style={{ width: `${progress * 100}%` }}
+          className="h-full bg-[#D4AF37]/60 rounded-full transition-all duration-300"
+          style={{ width: `${((activeIdx + 1) / ACTIVE_PHASES.length) * 100}%` }}
         />
       </div>
     </div>
