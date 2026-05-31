@@ -4,6 +4,7 @@ import { getMultiplierColor } from '@/lib/multiplierUtils'
 import { formatMultiplier } from '@/lib/gameEngine'
 import { useEffect, useRef, useState } from 'react'
 
+
 export default function Multiplier() {
   const multiplier = useGameStore((s) => s.multiplier)
   const phase = useGameStore((s) => s.phase)

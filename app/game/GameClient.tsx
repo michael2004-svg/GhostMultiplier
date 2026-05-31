@@ -196,7 +196,7 @@ export default function GameClient({ initialUser }: GameClientProps) {
           <div className="text-center py-2">
             <div className="text-xs text-gray-500 uppercase tracking-wider">Next Round In</div>
             <div className="text-3xl font-black text-nk-red mt-1">
-              {phase === 'RESOLUTION' || phase === 'IDLE' ? `${secondsLeft}s` : 'LIVE'}
+              {phase === 'RESOLUTION' || phase === 'WAITING' ? `${secondsLeft}s` : 'LIVE'}
             </div>
           </div>
         </div>
